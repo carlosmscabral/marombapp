@@ -1,0 +1,90 @@
+@import url('https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #6ab2ff;
+  --color-primary-dim: #3aa2ff;
+  --color-primary-container: #44a5ff;
+  --color-on-primary: #003055;
+  --color-on-primary-container: #002442;
+  --color-on-primary-fixed: #000000;
+  
+  --color-secondary: #ff716c;
+  --color-secondary-dim: #ff716c;
+  --color-secondary-container: #a00118;
+  --color-on-secondary: #490006;
+  --color-on-secondary-container: #ffd1cd;
+  
+  --color-tertiary: #fff7d0;
+  --color-tertiary-dim: #f0dc2b;
+  --color-tertiary-container: #ffeb3b;
+  --color-on-tertiary: #685e00;
+  --color-tertiary-fixed: #ffeb3b;
+  
+  --color-background: #000e26;
+  --color-on-background: #dbe5ff;
+  
+  --color-surface: #000e26;
+  --color-surface-dim: #000e26;
+  --color-surface-bright: #002b5d;
+  --color-surface-container-lowest: #000000;
+  --color-surface-container-low: #00132f;
+  --color-surface-container: #00193b;
+  --color-surface-container-high: #001f46;
+  --color-surface-container-highest: #002551;
+  --color-on-surface: #dbe5ff;
+  --color-on-surface-variant: #97abd4;
+  
+  --color-outline: #62769c;
+  --color-outline-variant: #34486b;
+
+  --font-headline: "Lexend", sans-serif;
+  --font-body: "Plus Jakarta Sans", sans-serif;
+  --font-label: "Plus Jakarta Sans", sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-on-surface font-body selection:bg-primary/30;
+    min-height: max(884px, 100dvh);
+  }
+}
+
+.signature-bar {
+  display: flex;
+  height: 4px;
+  width: 100%;
+  overflow: hidden;
+}
+.bar-blue { background-color: var(--color-primary); flex: 1; }
+.bar-red { background-color: var(--color-secondary); flex: 1; }
+.bar-yellow { background-color: var(--color-tertiary-fixed); flex: 1; }
+.bar-green { background-color: #4CAF50; flex: 1; }
+
+.kinetic-ring {
+  background: conic-gradient(
+    from 0deg,
+    var(--color-primary) 0% 35%,
+    var(--color-secondary) 35% 60%,
+    var(--color-tertiary-fixed) 60% 85%,
+    #4CAF50 85% 100%
+  );
+}
+
+.glass-overlay {
+  background: rgba(0, 37, 81, 0.7);
+  backdrop-filter: blur(20px);
+}
+
+.pulse-glow {
+  box-shadow: 0 0 20px rgba(106, 178, 255, 0.1);
+}
+
+/* Hide scrollbar for horizontal scroll areas */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

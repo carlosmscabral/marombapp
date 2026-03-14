@@ -1,0 +1,5 @@
+{
+  "name": "MarombApp",
+  "description": "A fitness tracking application with analytics, planning, library, and in-gym session tracking.",
+  "requestFramePermissions": []
+}
