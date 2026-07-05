@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CheckCircle2,
@@ -6,21 +14,19 @@ import {
   Dumbbell,
   Flag,
   Plus,
-  SkipForward,
   Trash2,
   Timer,
+  X,
 } from 'lucide-react';
 import { cn, SignatureBar } from '../components/Layout';
 import { useWakeLock } from '../lib/useWakeLock';
 import {
   abandonSession,
   addSetToExercise,
-  clearRestTimer,
   debounce,
   finishSession,
   flushPendingWrites,
   logSet,
-  startRestTimer,
   subscribeActiveSession,
   updateSessionExercise,
   updateSessionField,
@@ -29,6 +35,10 @@ import type { Session, SessionExercise, SessionSet } from '../types';
 
 const DEBOUNCE_MS = 250;
 const DEFAULT_REST_SEC = 90;
+
+// Local, non-persisted rest timer. Completing a set calls this with the
+// exercise's target rest so the floating timer can start counting up.
+const StartRestContext = createContext<(targetSec: number) => void>(() => {});
 
 function formatElapsed(ms: number): string {
   if (!Number.isFinite(ms) || ms < 0) ms = 0;
@@ -94,6 +104,7 @@ interface SetRowProps {
 }
 
 function SetRow({ sessionId, exerciseIndex, setIndex, set, restSec }: SetRowProps) {
+  const startRest = useContext(StartRestContext);
   const [weight, setWeight] = useState<string>(
     set.weight ? String(set.weight) : '',
   );
@@ -155,7 +166,7 @@ function SetRow({ sessionId, exerciseIndex, setIndex, set, restSec }: SetRowProp
       completedAt: isComplete ? null : Date.now(),
     });
     if (!isComplete) {
-      void startRestTimer(sessionId, restSec || DEFAULT_REST_SEC);
+      startRest(restSec || DEFAULT_REST_SEC);
     }
   };
 
@@ -326,20 +337,25 @@ function ExerciseCard({ sessionId, exercise, index }: ExerciseCardProps) {
   );
 }
 
-function RestBar({
-  sessionId,
+// Local, non-persisted rest timer. Counts UP from when the last set was
+// completed so the user can see how long they've been resting. The target
+// rest is shown as guidance and the bar chimes once it's reached, but the
+// timer keeps counting so overshoot is visible too.
+function RestTimer({
   startedAt,
-  durationSec,
+  targetSec,
+  onDismiss,
 }: {
-  sessionId: string;
   startedAt: number;
-  durationSec: number;
+  targetSec: number;
+  onDismiss: () => void;
 }) {
   const [now, setNow] = useState(() => Date.now());
-  const firedRef = useRef(false);
+  const chimedRef = useRef(false);
 
   useEffect(() => {
-    firedRef.current = false;
+    chimedRef.current = false;
+    setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 200);
     const onVis = () => {
       if (document.visibilityState === 'visible') setNow(Date.now());
@@ -349,51 +365,61 @@ function RestBar({
       clearInterval(id);
       document.removeEventListener('visibilitychange', onVis);
     };
-  }, [startedAt, durationSec]);
+  }, [startedAt]);
 
-  const elapsed = Math.floor((now - startedAt) / 1000);
-  const remaining = durationSec - elapsed;
+  const elapsed = Math.max(0, Math.floor((now - startedAt) / 1000));
+  const reached = elapsed >= targetSec;
 
   useEffect(() => {
-    if (remaining <= 0 && !firedRef.current) {
-      firedRef.current = true;
+    if (reached && !chimedRef.current) {
+      chimedRef.current = true;
       playChime();
       vibrate([100, 50, 100]);
-      void clearRestTimer(sessionId);
     }
-  }, [remaining, sessionId]);
+  }, [reached]);
 
-  if (remaining <= 0) return null;
-
-  const pct = Math.max(0, Math.min(100, (remaining / durationSec) * 100));
+  const pct = Math.max(0, Math.min(100, (elapsed / targetSec) * 100));
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40 bg-surface-container-high border-t border-outline-variant/20 pb-safe">
       <div className="h-1 bg-surface-container-low overflow-hidden">
         <div
-          className="h-full bg-tertiary-fixed transition-[width] duration-200 ease-linear"
+          className={cn(
+            'h-full transition-[width] duration-200 ease-linear',
+            reached ? 'bg-secondary' : 'bg-tertiary-fixed',
+          )}
           style={{ width: `${pct}%` }}
         />
       </div>
       <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <Timer className="w-5 h-5 text-tertiary-fixed" />
+          <Timer
+            className={cn(
+              'w-5 h-5',
+              reached ? 'text-secondary' : 'text-tertiary-fixed',
+            )}
+          />
           <div className="leading-tight">
             <p className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">
-              Rest
+              {reached ? 'Rest • target reached' : 'Resting'}
             </p>
             <p className="font-headline text-2xl font-bold tabular-nums">
-              {formatRest(remaining)}
+              {formatRest(elapsed)}
+              <span className="text-sm font-semibold text-on-surface-variant/70">
+                {' '}
+                / {formatRest(targetSec)}
+              </span>
             </p>
           </div>
         </div>
         <button
           type="button"
-          onClick={() => void clearRestTimer(sessionId)}
+          onClick={onDismiss}
+          aria-label="Dismiss rest timer"
           className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-container-low text-on-surface-variant text-xs font-label font-bold uppercase tracking-widest hover:text-primary"
         >
-          <SkipForward className="w-4 h-4" />
-          Skip
+          <X className="w-4 h-4" />
+          Done
         </button>
       </div>
     </div>
@@ -493,9 +519,18 @@ function ActiveSessionView({ session }: { session: Session }) {
     await abandonSession(sessionId);
   }, [sessionId, writeSessionNotes]);
 
+  // Local, non-persisted rest timer state — starts when a set is completed.
+  const [rest, setRest] = useState<{ startedAt: number; targetSec: number } | null>(
+    null,
+  );
+  const startRest = useCallback((targetSec: number) => {
+    setRest({ startedAt: Date.now(), targetSec });
+  }, []);
+
   const elapsedMs = now - session.startedAt;
 
   return (
+    <StartRestContext.Provider value={startRest}>
     <div className="px-4 py-6 space-y-6 max-w-2xl mx-auto w-full pb-32">
       {/* Header */}
       <section className="text-center space-y-2">
@@ -578,15 +613,16 @@ function ActiveSessionView({ session }: { session: Session }) {
         </button>
       </div>
 
-      {/* Rest timer overlay */}
-      {session.restTimer && (
-        <RestBar
-          sessionId={sessionId}
-          startedAt={session.restTimer.startedAt}
-          durationSec={session.restTimer.durationSec}
+      {/* Rest timer overlay (local, non-persisted) */}
+      {rest && (
+        <RestTimer
+          startedAt={rest.startedAt}
+          targetSec={rest.targetSec}
+          onDismiss={() => setRest(null)}
         />
       )}
     </div>
+    </StartRestContext.Provider>
   );
 }
 
