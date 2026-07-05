@@ -40,6 +40,38 @@ const DEFAULT_REST_SEC = 90;
 // exercise's target rest so the floating timer can start counting up.
 const StartRestContext = createContext<(targetSec: number) => void>(() => {});
 
+// The running timer is kept in sessionStorage (NOT the database) so it survives
+// switching screens and page reloads within the same tab/session. It is keyed
+// by session id so a stale timer never leaks into a different workout, and it
+// naturally disappears when the tab is closed.
+const REST_KEY = 'maromba.restTimer';
+type RestState = { startedAt: number; targetSec: number };
+
+function loadRest(sessionId: string): RestState | null {
+  try {
+    const raw = sessionStorage.getItem(REST_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as Partial<RestState & { sessionId: string }>;
+    if (p.sessionId !== sessionId) return null;
+    if (typeof p.startedAt !== 'number' || typeof p.targetSec !== 'number') return null;
+    return { startedAt: p.startedAt, targetSec: p.targetSec };
+  } catch {
+    return null;
+  }
+}
+
+function saveRest(sessionId: string, rest: RestState | null): void {
+  try {
+    if (rest) {
+      sessionStorage.setItem(REST_KEY, JSON.stringify({ ...rest, sessionId }));
+    } else {
+      sessionStorage.removeItem(REST_KEY);
+    }
+  } catch {
+    /* storage unavailable — timer just won't survive reloads */
+  }
+}
+
 function formatElapsed(ms: number): string {
   if (!Number.isFinite(ms) || ms < 0) ms = 0;
   const totalSec = Math.floor(ms / 1000);
@@ -354,7 +386,9 @@ function RestTimer({
   const chimedRef = useRef(false);
 
   useEffect(() => {
-    chimedRef.current = false;
+    // If we're restoring a timer that already passed its target (e.g. after a
+    // reload), don't fire the chime again — only chime on a live crossing.
+    chimedRef.current = Math.floor((Date.now() - startedAt) / 1000) >= targetSec;
     setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 200);
     const onVis = () => {
@@ -365,7 +399,7 @@ function RestTimer({
       clearInterval(id);
       document.removeEventListener('visibilitychange', onVis);
     };
-  }, [startedAt]);
+  }, [startedAt, targetSec]);
 
   const elapsed = Math.max(0, Math.floor((now - startedAt) / 1000));
   const reached = elapsed >= targetSec;
@@ -504,28 +538,38 @@ function ActiveSessionView({ session }: { session: Session }) {
     };
   }, [writeSessionNotes]);
 
+  // Rest timer state — kept in sessionStorage (not the DB) so it survives
+  // navigating between screens and reloads within this tab. Restored on mount.
+  const [rest, setRest] = useState<RestState | null>(() => loadRest(sessionId));
+  const startRest = useCallback(
+    (targetSec: number) => {
+      const next = { startedAt: Date.now(), targetSec };
+      setRest(next);
+      saveRest(sessionId, next);
+    },
+    [sessionId],
+  );
+  const dismissRest = useCallback(() => {
+    setRest(null);
+    saveRest(sessionId, null);
+  }, [sessionId]);
+
   const handleFinish = useCallback(async () => {
     if (!confirm('Finish this workout?')) return;
+    dismissRest();
     writeSessionNotes.flush();
     await flushPendingWrites();
     await finishSession(sessionId);
     navigate(`/sessions/${sessionId}`);
-  }, [sessionId, writeSessionNotes, navigate]);
+  }, [sessionId, writeSessionNotes, navigate, dismissRest]);
 
   const handleAbandon = useCallback(async () => {
     if (!confirm('Abandon this workout? Logged sets will be kept in history.')) return;
+    dismissRest();
     writeSessionNotes.flush();
     await flushPendingWrites();
     await abandonSession(sessionId);
-  }, [sessionId, writeSessionNotes]);
-
-  // Local, non-persisted rest timer state — starts when a set is completed.
-  const [rest, setRest] = useState<{ startedAt: number; targetSec: number } | null>(
-    null,
-  );
-  const startRest = useCallback((targetSec: number) => {
-    setRest({ startedAt: Date.now(), targetSec });
-  }, []);
+  }, [sessionId, writeSessionNotes, dismissRest]);
 
   const elapsedMs = now - session.startedAt;
 
@@ -618,7 +662,7 @@ function ActiveSessionView({ session }: { session: Session }) {
         <RestTimer
           startedAt={rest.startedAt}
           targetSec={rest.targetSec}
-          onDismiss={() => setRest(null)}
+          onDismiss={dismissRest}
         />
       )}
     </div>
