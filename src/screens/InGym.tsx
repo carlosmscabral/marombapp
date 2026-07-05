@@ -28,6 +28,7 @@ import {
   flushPendingWrites,
   logSet,
   subscribeActiveSession,
+  subscribeRecentSessions,
   updateSessionExercise,
   updateSessionField,
 } from '../lib/db';
@@ -35,6 +36,76 @@ import type { Session, SessionExercise, SessionSet } from '../types';
 
 const DEBOUNCE_MS = 250;
 const DEFAULT_REST_SEC = 90;
+
+// How many recent completed sessions to scan, and how many prior executions to
+// show per exercise. 30 covers weekly/twice-weekly exercises cheaply; exercises
+// not trained within that window simply show no history (only recent history is
+// actionable for progressive overload).
+const HISTORY_WINDOW = 30;
+const HISTORY_MAX = 3;
+
+// One prior execution of an exercise: its completed sets, the session date, and
+// the exercise note from that session (for progressive-overload context).
+interface HistoryEntry {
+  date: number;
+  noteText: string;
+  sets: SessionSet[];
+}
+
+// Build exerciseId -> last N executions from completed sessions (newest first).
+// Matching is by exerciseId only, so plan edits, reordering, and renames don't
+// break it. Within a single session, multiple occurrences of the same exercise
+// (e.g. supersets) are merged into one entry; a session where the exercise had
+// no completed set is not counted as an execution.
+function buildHistoryMap(sessions: Session[]): Map<string, HistoryEntry[]> {
+  const map = new Map<string, HistoryEntry[]>();
+  for (const s of sessions) {
+    // Collapse duplicate occurrences of the same exerciseId within this session.
+    const perExercise = new Map<string, { sets: SessionSet[]; noteText: string }>();
+    for (const ex of s.exercises) {
+      const doneSets = ex.sets.filter((set) => set.completedAt != null);
+      if (doneSets.length === 0) continue;
+      const acc = perExercise.get(ex.exerciseId);
+      if (acc) {
+        acc.sets.push(...doneSets);
+        if (!acc.noteText && ex.notes) acc.noteText = ex.notes;
+      } else {
+        perExercise.set(ex.exerciseId, {
+          sets: doneSets,
+          noteText: ex.notes ?? '',
+        });
+      }
+    }
+    const date = s.finishedAt ?? s.startedAt;
+    for (const [exerciseId, acc] of perExercise) {
+      const list = map.get(exerciseId) ?? [];
+      if (list.length >= HISTORY_MAX) continue;
+      list.push({ date, noteText: acc.noteText, sets: acc.sets });
+      map.set(exerciseId, list);
+    }
+  }
+  return map;
+}
+
+function formatDateShort(ts: number): string {
+  if (!ts) return '—';
+  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+// "Today" / "Yesterday" / "N days ago" / "Jul 5" — matches Analytics.tsx.
+function formatRelative(ts: number): string {
+  if (!ts) return '—';
+  const now = Date.now();
+  const diff = now - ts;
+  const day = 24 * 60 * 60 * 1000;
+  if (diff < day && new Date(ts).toDateString() === new Date(now).toDateString()) {
+    return 'Today';
+  }
+  if (diff < 2 * day) return 'Yesterday';
+  const days = Math.floor(diff / day);
+  if (days < 7) return `${days} days ago`;
+  return formatDateShort(ts);
+}
 
 // Local, non-persisted rest timer. Completing a set calls this with the
 // exercise's target rest so the floating timer can start counting up.
@@ -268,13 +339,58 @@ function SetRow({ sessionId, exerciseIndex, setIndex, set, restSec }: SetRowProp
   );
 }
 
+// Read-only progressive-overload guidance: the last few times this exercise was
+// executed. `undefined` = still loading; `[]` = loaded with no prior data.
+function ExerciseHistory({ history }: { history?: HistoryEntry[] }) {
+  return (
+    <div className="border-t border-outline-variant/10 pt-3 space-y-2">
+      <p className="font-label text-[10px] uppercase tracking-[0.2em] text-tertiary-fixed/80">
+        Last sessions
+      </p>
+      {history === undefined ? (
+        <p className="text-xs text-on-surface-variant/50 font-label">Loading history…</p>
+      ) : history.length === 0 ? (
+        <p className="text-xs text-on-surface-variant/50 font-label">No previous data</p>
+      ) : (
+        <div className="space-y-1.5">
+          {history.map((entry, i) => (
+            <div key={i} className="bg-surface-container rounded-md px-3 py-2 space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="shrink-0 font-label text-[10px] uppercase tracking-widest text-on-surface-variant/70 w-20">
+                  {formatRelative(entry.date)}
+                </span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {entry.sets.map((s, sIdx) => (
+                    <span
+                      key={sIdx}
+                      className="font-headline text-xs font-semibold tabular-nums text-tertiary-fixed bg-surface-container-highest rounded px-1.5 py-0.5"
+                    >
+                      {s.weight || '—'}×{s.reps || '—'}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              {entry.noteText && (
+                <p className="text-[11px] text-on-surface-variant/70 whitespace-pre-wrap pl-1">
+                  {entry.noteText}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface ExerciseCardProps {
   sessionId: string;
   exercise: SessionExercise;
   index: number;
+  history?: HistoryEntry[];
 }
 
-function ExerciseCard({ sessionId, exercise, index }: ExerciseCardProps) {
+function ExerciseCard({ sessionId, exercise, index, history }: ExerciseCardProps) {
   const [notes, setNotes] = useState<string>(exercise.notes ?? '');
   const focusedRef = useRef(false);
   useEffect(() => {
@@ -335,6 +451,8 @@ function ExerciseCard({ sessionId, exercise, index }: ExerciseCardProps) {
           placeholder="Notes for this exercise…"
           className="w-full bg-surface-container rounded-lg px-3 py-2 text-sm font-body outline-none focus:ring-2 focus:ring-primary/40 resize-none placeholder:text-on-surface-variant/50"
         />
+
+        <ExerciseHistory history={history} />
 
         <div className="grid grid-cols-[2.5rem_1fr_1fr_3rem] gap-2 px-2 text-[10px] font-label font-black uppercase tracking-widest text-on-surface-variant/60">
           <div className="text-center">Set</div>
@@ -491,6 +609,19 @@ function ActiveSessionView({ session }: { session: Session }) {
   // Wake lock while a session is live.
   useWakeLock(true);
 
+  // Prior-execution history for progressive-overload guidance. One subscription
+  // for the whole screen; each card reads its slice from the memoized map.
+  // null = still loading.
+  const [recentSessions, setRecentSessions] = useState<Session[] | null>(null);
+  useEffect(() => {
+    const unsub = subscribeRecentSessions(HISTORY_WINDOW, setRecentSessions);
+    return () => unsub();
+  }, []);
+  const historyMap = useMemo(
+    () => (recentSessions ? buildHistoryMap(recentSessions) : null),
+    [recentSessions],
+  );
+
   // Elapsed-time ticker — only matters when visible.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -632,6 +763,7 @@ function ActiveSessionView({ session }: { session: Session }) {
               sessionId={sessionId}
               exercise={ex}
               index={idx}
+              history={historyMap ? (historyMap.get(ex.exerciseId) ?? []) : undefined}
             />
           ))
         )}
