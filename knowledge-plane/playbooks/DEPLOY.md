@@ -1,6 +1,6 @@
 # Cloud Run Deployment Playbook (`marombapp-serving`)
 
-Covers packaging, deploying, verifying, and rolling back `marombapp-serving` on Cloud Run in `cabral-scion-hub` (`us-central1`) per REQ-003, REQ-004, ADR-001, and ADR-002.
+Covers packaging, deploying, verifying, and rolling back `marombapp-serving` on Cloud Run and the isolated `marombapp` Firestore database in `cabral-scion-hub` (`us-central1`) per REQ-002, REQ-003, REQ-004, ADR-001, and ADR-002.
 
 ## Service & IAM Topology
 
@@ -10,7 +10,10 @@ Covers packaging, deploying, verifying, and rolling back `marombapp-serving` on 
 - **Cloud Build Service Account:** `projects/cabral-scion-hub/serviceAccounts/cabral-builder@cabral-scion-hub.iam.gserviceaccount.com`
 - **Deployer Identity:** `cabral-agent@cabral-scion-hub.iam.gserviceaccount.com` (holds `roles/run.admin` on `marombapp-serving` and `roles/iam.serviceAccountUser` on both `marombapp-run@` and `cabral-builder@`)
 - **Public Invoker Policy:** `allUsers` already holds `roles/run.invoker` on `marombapp-serving` (verified via `gcloud run services get-iam-policy marombapp-serving`), so `--allow-unauthenticated` is omitted from `gcloud run deploy` to avoid any IAM mutation call.
-- **Firestore Database:** Named Native database `marombapp` (`projects/cabral-scion-hub/databases/marombapp`)
+- **Firestore Database & Firebase Config:**
+  - Named Native database `marombapp` (`projects/cabral-scion-hub/databases/marombapp`).
+  - [`firebase.json`](../../firebase.json) uses the array form for `firestore` with `"database": "marombapp"` so `firebase deploy --only firestore` can never target `(default)`.
+  - [`.firebaserc`](../../.firebaserc) keeps `"default": "vibe-cabral"` (so `main` and production promotion remain untouched per ADR-002) and defines `"hub": "cabral-scion-hub"`. Every factory command passes explicit `--project cabral-scion-hub`.
 
 ## Build Arguments vs. Runtime Environment
 
@@ -35,6 +38,38 @@ Covers packaging, deploying, verifying, and rolling back `marombapp-serving` on 
   - For the interim Release 1 deploy (PO `#7` Option C), the `Dockerfile` default `ARG` values (`VITE_FIRESTORE_DATABASE_ID="marombapp"` and empty `VITE_FIREBASE_*`) are intentional for L1/L2 verification.
   - Once PO decision `#7` resolves the Firebase web app configuration, verify and standardize the build-arg delivery path before the full end-to-end release (either `gcloud builds submit --config=cloudbuild.yaml` passing `--build-arg VITE_FIREBASE_*=...` followed by `gcloud run deploy --image=...`, or staging a public web-config file in the clean archive directory `$d`) and confirm post-deploy by grepping the served JS bundle for the expected `VITE_FIREBASE_PROJECT_ID`.
 
+## Firestore Rules & Composite Indexes (`database: marombapp`)
+
+> [!IMPORTANT]
+> **Status: Blocked on PO decision `#7`** (`roles/firebaserules.admin` + `roles/datastore.indexAdmin` IAM bindings for `cabral-agent@` or PO-executed deployment, plus confirmation of the Hub Firebase Auth UID in [`firestore.rules`](../../firestore.rules)).
+
+1. **Deploy Firestore rules and composite indexes to `marombapp` (never `(default)`):**
+   ```bash
+   firebase deploy --only firestore:marombapp --project cabral-scion-hub
+   ```
+   Or create the `sessions` composite index (`status` ASC, `finishedAt` DESC from [`firestore.indexes.json`](../../firestore.indexes.json)) directly via `gcloud`:
+   ```bash
+   gcloud firestore indexes composite create \
+     --project=cabral-scion-hub \
+     --database=marombapp \
+     --collection-group=sessions \
+     --field-config=field-path=status,order=ascending \
+     --field-config=field-path=finishedAt,order=descending \
+     --quiet
+   ```
+2. **Verify composite index and security rules release on `marombapp`:**
+   ```bash
+   gcloud firestore indexes composite list \
+     --project=cabral-scion-hub \
+     --database=marombapp \
+     --format=json \
+     --quiet
+
+   curl -sf \
+     -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+     "https://firebaserules.googleapis.com/v1/projects/cabral-scion-hub/releases/cloud.firestore/marombapp"
+   ```
+
 ## Step 1: Clean Archive Packaging
 
 Never run `gcloud run deploy --source=/workspace` directly on a workspace checkout, and never archive `HEAD` of a feature branch. Fetch `origin` and export the verified `origin/factory/main` commit via `git archive` to a clean temporary directory:
@@ -48,7 +83,7 @@ git -C /workspace archive "$sha" | tar -x -C "$d"
 
 ## Step 2: Deploy to Cloud Run & Route Traffic
 
-Deploy from the clean archive directory with `--build-service-account` and `--service-account` (`FIREBASE_PROJECT_ID` must equal the Firebase Auth project per PO `#7`, or may be omitted during the interim Option C deploy when defaulting to `GOOGLE_CLOUD_PROJECT`):
+Deploy from the clean archive directory with `--build-service-account` and `--service-account` (`FIREBASE_PROJECT_ID` must equal the Firebase Auth project per PO `#7`; `export FIREBASE_PROJECT_ID=cabral-scion-hub` for the interim Option C deploy):
 
 ```bash
 gcloud run deploy marombapp-serving \
@@ -61,7 +96,7 @@ gcloud run deploy marombapp-serving \
   --quiet
 ```
 
-`marombapp-serving` tracks `latestRevision: true` (`100%` traffic) by default, so `gcloud run deploy` routes 100% of traffic to the newly created revision automatically (note that `gcloud run deploy` in `gcloud` 589+ does not accept `--to-latest`). If traffic was previously pinned to a specific revision (for example after a rollback or `--no-traffic` deploy), unpin it to the latest revision with:
+Unconditionally run `update-traffic --to-latest` after every deploy (idempotent) so any traffic pin left by a prior rollback is cleared (note that `gcloud run deploy` in `gcloud` 589+ does not accept `--to-latest`):
 
 ```bash
 gcloud run services update-traffic marombapp-serving \
@@ -75,7 +110,8 @@ gcloud run services update-traffic marombapp-serving \
 
 Immediately after rollout, verify all L1 and L2 contract checks against `SERVICE_URL`:
 
-1. **L1 Health & PWA Assets:**
+1. **L1 Health, Traffic & PWA Assets:**
+   - `gcloud run services describe marombapp-serving --project=cabral-scion-hub --region=us-central1 --format="json(status.traffic)" --quiet` shows `latestRevision: true` at `percent: 100`.
    - `GET /api/healthz` returns HTTP `200` with strict JSON `{"status":"ok","revision":"<revision>","firestoreDatabase":"marombapp","aiReady":true}`.
    - `GET /` returns HTTP `200` HTML (`index.html`).
    - `GET /manifest.webmanifest` returns HTTP `200` (`application/manifest+json`).
