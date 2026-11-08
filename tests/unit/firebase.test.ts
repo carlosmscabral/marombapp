@@ -3,7 +3,7 @@
  * Verifies that `VITE_FIRESTORE_DATABASE_ID` defaults to `(default)`, accepts named databases, and preserves multi-tab IndexedDB persistence.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   initializeApp: vi.fn(() => ({ name: '[DEFAULT]' })),
@@ -34,13 +34,21 @@ import {
 } from '../../src/lib/firebase';
 
 describe('resolveFirestoreDatabaseId', () => {
-  it('defaults to (default) when unset, empty, or whitespace', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('defaults to (default) when env is unset, empty, or whitespace', () => {
+    vi.stubEnv('VITE_FIRESTORE_DATABASE_ID', '');
+    expect(resolveFirestoreDatabaseId()).toBe('(default)');
     expect(resolveFirestoreDatabaseId(undefined)).toBe('(default)');
     expect(resolveFirestoreDatabaseId('')).toBe('(default)');
     expect(resolveFirestoreDatabaseId('   ')).toBe('(default)');
   });
 
-  it('returns the trimmed named database identifier when configured', () => {
+  it('returns the trimmed named database identifier from arguments or env', () => {
+    vi.stubEnv('VITE_FIRESTORE_DATABASE_ID', '  marombapp  ');
+    expect(resolveFirestoreDatabaseId()).toBe('marombapp');
     expect(resolveFirestoreDatabaseId('marombapp')).toBe('marombapp');
     expect(resolveFirestoreDatabaseId('  marombapp  ')).toBe('marombapp');
   });
