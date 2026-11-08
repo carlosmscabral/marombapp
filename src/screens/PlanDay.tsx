@@ -11,10 +11,10 @@ import {
   debounce,
   deletePlanDay,
   renamePlanDay,
-  setDayExercises,
 } from '../lib/db';
-import type { Exercise, PlanDay as PlanDayT, PlanExercise } from '../types';
+import type { Exercise, PlanDay as PlanDayT } from '../types';
 import { NotesField, NumberField } from './plan/PlanDayFields';
+import { usePlanDayExercises } from './plan/usePlanDayExercises';
 
 export interface PlanDayProps {
   planId: string;
@@ -46,74 +46,32 @@ export function PlanDay({ planId, day, library, onBack }: PlanDayProps) {
   );
   useEffect(() => () => debouncedRename.flush(), [debouncedRename]);
 
-  const exercises = day.exercises;
-  const latestExercisesRef = useRef(exercises);
-  latestExercisesRef.current = exercises;
+  const {
+    exercises,
+    flushExercises,
+    cancelExercises,
+    patchExercise,
+    moveExercise,
+    removeExercise,
+    appendExercise,
+  } = usePlanDayExercises(planId, day);
 
   const libIndex = useMemo(
     () => new Map(library.map((e) => [e.id, e] as const)),
     [library],
   );
 
-  const debouncedWrite = useMemo(
-    () =>
-      debounce((next: PlanExercise[]) => {
-        setDayExercises(planId, day.id, next).catch(() => {});
-      }, 250),
-    [planId, day.id],
-  );
-  useEffect(() => () => debouncedWrite.flush(), [debouncedWrite]);
-
-  const commitExercisesImmediately = (next: PlanExercise[]) => {
-    // Cancel any pending keystroke timer so stale array snapshots cannot overwrite structural edits.
-    debouncedWrite.cancel();
-    latestExercisesRef.current = next;
-    setDayExercises(planId, day.id, next).catch(() => {});
-  };
-
-  const patchExercise = (idx: number, patch: Partial<PlanExercise>) => {
-    const next = latestExercisesRef.current.map((pe, i) =>
-      i === idx ? { ...pe, ...patch } : pe,
-    );
-    latestExercisesRef.current = next;
-    debouncedWrite(next);
-  };
-
-  const moveExercise = (idx: number, dir: -1 | 1) => {
-    debouncedWrite.flush();
-    const current = latestExercisesRef.current;
-    const target = idx + dir;
-    if (target < 0 || target >= current.length) return;
-    const next = [...current];
-    [next[idx], next[target]] = [next[target], next[idx]];
-    commitExercisesImmediately(next);
-  };
-
-  const removeExercise = (idx: number) => {
-    const current = latestExercisesRef.current;
-    const next = current.filter((_, i) => i !== idx);
-    commitExercisesImmediately(next);
-  };
-
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const onPickExercise = (ex: Exercise) => {
-    debouncedWrite.flush();
-    const newPe: PlanExercise = {
-      exerciseId: ex.id,
-      targetSets: 3,
-      targetRepsLow: 8,
-      targetRepsHigh: 12,
-      notes: '',
-    };
-    commitExercisesImmediately([...latestExercisesRef.current, newPe]);
+    appendExercise(ex);
     setPickerOpen(false);
   };
 
   const handleDeleteDay = async () => {
     if (!confirm(`Delete training day "${day.name}"?`)) return;
     debouncedRename.cancel();
-    debouncedWrite.cancel();
+    cancelExercises();
     await deletePlanDay(planId, day.id).catch(() => {});
     onBack();
   };
@@ -233,28 +191,28 @@ export function PlanDay({ planId, day, library, onBack }: PlanDayProps) {
                     label="Sets"
                     value={pe.targetSets}
                     min={1}
-                    onBlur={() => debouncedWrite.flush()}
+                    onBlur={flushExercises}
                     onChange={(v) => patchExercise(idx, { targetSets: v })}
                   />
                   <NumberField
                     label="Reps Low"
                     value={pe.targetRepsLow}
                     min={1}
-                    onBlur={() => debouncedWrite.flush()}
+                    onBlur={flushExercises}
                     onChange={(v) => patchExercise(idx, { targetRepsLow: v })}
                   />
                   <NumberField
                     label="Reps High"
                     value={pe.targetRepsHigh}
                     min={1}
-                    onBlur={() => debouncedWrite.flush()}
+                    onBlur={flushExercises}
                     onChange={(v) => patchExercise(idx, { targetRepsHigh: v })}
                   />
                 </div>
 
                 <NotesField
                   value={pe.notes}
-                  onBlur={() => debouncedWrite.flush()}
+                  onBlur={flushExercises}
                   onChange={(val) => patchExercise(idx, { notes: val })}
                 />
               </div>
