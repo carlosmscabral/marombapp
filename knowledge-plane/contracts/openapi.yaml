@@ -1,0 +1,126 @@
+# OpenAPI 3.1 contract for MarombApp Cloud Run BFF (REQ-003, REQ-004, REQ-005, ADR-001).
+openapi: 3.1.0
+info:
+  title: MarombApp Cloud Run BFF API
+  version: 1.0.0
+  description: >
+    Thin Node/TypeScript Cloud Run BFF serving compiled PWA static assets with SPA route fallback,
+    public health readiness checks, single-UID Firebase ID token authentication, and dormant Vertex AI
+    router boundary (REQ-003, REQ-004, REQ-005, ADR-001).
+paths:
+  /api/healthz:
+    get:
+      operationId: getHealthz
+      summary: Public L1/L2 health and runtime configuration readiness probe
+      security: []
+      responses:
+        "200":
+          description: Strict JSON health payload without invoking Vertex AI
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthzResponse"
+  /api/auth/session:
+    get:
+      operationId: getAuthSession
+      summary: Verify Firebase ID token against ALLOWED_UID and return caller session
+      security:
+        - firebaseBearerAuth: []
+      responses:
+        "200":
+          description: Caller is authenticated and matches ALLOWED_UID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSessionResponse"
+        "401":
+          description: Missing, malformed, or invalid Firebase ID token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+        "403":
+          description: Valid Firebase ID token for a non-ALLOWED_UID caller or unset ALLOWED_UID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+  /api/ai/{subpath}:
+    post:
+      operationId: postAiBoundary
+      summary: Protected Vertex AI router boundary (dormant in Wave 1)
+      security:
+        - firebaseBearerAuth: []
+      parameters:
+        - name: subpath
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "401":
+          description: Missing, malformed, or invalid Firebase ID token (zero Vertex AI calls)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+        "403":
+          description: Valid Firebase ID token for a non-ALLOWED_UID caller (zero Vertex AI calls)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+        "501":
+          description: Dormant Wave 1 AI boundary stub for authenticated ALLOWED_UID caller
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+components:
+  securitySchemes:
+    firebaseBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Firebase Auth ID token verified via firebase-admin and checked against ALLOWED_UID
+  schemas:
+    HealthzResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - revision
+        - firestoreDatabase
+        - aiReady
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+        revision:
+          type: string
+        firestoreDatabase:
+          type: string
+        aiReady:
+          type: boolean
+    AuthSessionResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - uid
+      properties:
+        uid:
+          type: string
+        email:
+          type: string
+    ApiErrorResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+        message:
+          type: string

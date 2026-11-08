@@ -5,7 +5,7 @@ same work item as the code that implements it.
 
 ## Contract files
 
-- None yet. Add OpenAPI, protobuf, or GraphQL files to this directory.
+- [`openapi.yaml`](openapi.yaml) — Cloud Run BFF HTTP contract covering `/api/healthz`, `/api/auth/session`, and the protected `/api/ai/*` boundary (`REQ-003`, `REQ-004`, `REQ-005`, `ADR-001`).
 
 ## Endpoints under contract
 
