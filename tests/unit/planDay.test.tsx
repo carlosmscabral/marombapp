@@ -1,7 +1,7 @@
 /**
- * Component tests for `PlanDay` snapshot re-render race protection (#8, REQ-002).
- * Verifies that a Firestore snapshot re-render between a debounced field edit and its flush
- * never drops pending or follow-up field edits.
+ * Component tests for `PlanDay` snapshot re-render race protection (#8, #12, REQ-002).
+ * Verifies that Firestore snapshot re-renders (including exercise reorders) preserve pending
+ * local patches, while rejected writes prune failed patches and pending offline writes keep them.
  */
 
 import React, { act } from 'react';
@@ -11,7 +11,9 @@ import { debounce } from '../../src/lib/debounce';
 import type { Exercise, PlanDay as PlanDayT, PlanExercise } from '../../src/types';
 
 const mocks = vi.hoisted(() => ({
-  setDayExercises: vi.fn(async (_p: string, _d: string, _ex: PlanExercise[]) => undefined),
+  setDayExercises: vi.fn(
+    async (_p: string, _d: string, _ex: PlanExercise[]) => undefined,
+  ),
   renamePlanDay: vi.fn(async () => undefined),
   deletePlanDay: vi.fn(async () => undefined),
 }));
@@ -27,22 +29,11 @@ import { PlanDay } from '../../src/screens/PlanDay';
 
 interface MinimalElement {
   nodeType: number;
-  nodeName: string;
   tagName: string;
-  namespaceURI: string;
-  ownerDocument: unknown;
-  childNodes: Array<MinimalElement | { nodeType: 3; nodeValue: string; parentNode?: unknown }>;
+  childNodes: Array<MinimalElement | { nodeType: 3; nodeValue: string }>;
   parentNode?: unknown;
   style: Record<string, unknown>;
   attributes: Record<string, string>;
-  addEventListener: () => void;
-  removeEventListener: () => void;
-  setAttribute: (k: string, v: unknown) => void;
-  removeAttribute: (k: string) => void;
-  appendChild: (c: MinimalElement) => MinimalElement;
-  removeChild: (c: MinimalElement) => MinimalElement;
-  insertBefore: (c: MinimalElement, b: MinimalElement | null) => MinimalElement;
-  textContent: string;
   [key: string]: unknown;
 }
 
@@ -52,6 +43,7 @@ interface MinimalElement {
 function createTestContainer(): MinimalElement {
   (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
   (globalThis as Record<string, unknown>).HTMLIFrameElement = class {};
+  const noop = () => undefined;
 
   const doc: Record<string, unknown> = {
     nodeType: 9,
@@ -63,27 +55,28 @@ function createTestContainer(): MinimalElement {
       nodeValue: String(text),
       data: String(text),
     }),
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
+    addEventListener: noop,
+    removeEventListener: noop,
   };
 
   function makeEl(tag: string): MinimalElement {
-    const el: MinimalElement = {
+    const upper = tag.toUpperCase();
+    return {
       nodeType: 1,
-      nodeName: tag.toUpperCase(),
-      tagName: tag.toUpperCase(),
+      nodeName: upper,
+      tagName: upper,
       namespaceURI: 'http://www.w3.org/1999/xhtml',
       ownerDocument: doc,
       childNodes: [],
       style: {},
       attributes: {},
-      addEventListener: () => undefined,
-      removeEventListener: () => undefined,
+      addEventListener: noop,
+      removeEventListener: noop,
       setAttribute(k: string, v: unknown) {
-        this.attributes[k] = String(v);
+        (this.attributes as Record<string, string>)[k] = String(v);
       },
       removeAttribute(k: string) {
-        delete this.attributes[k];
+        delete (this.attributes as Record<string, string>)[k];
       },
       appendChild(child: MinimalElement) {
         this.childNodes.push(child);
@@ -101,18 +94,7 @@ function createTestContainer(): MinimalElement {
         child.parentNode = this;
         return child;
       },
-      get textContent(): string {
-        return this.childNodes
-          .map((c) => (c.nodeType === 3 ? c.nodeValue : c.textContent))
-          .join('');
-      },
-      set textContent(value: string) {
-        this.childNodes = value
-          ? [{ nodeType: 3 as const, nodeValue: String(value), parentNode: this }]
-          : [];
-      },
     };
-    return el;
   }
 
   (globalThis as Record<string, unknown>).window = globalThis;
@@ -135,6 +117,7 @@ function findAllByTag(rootEl: MinimalElement, tag: string): MinimalElement[] {
 
 interface ElementReactProps {
   type?: string;
+  value?: string;
   onFocus?: () => void;
   onBlur?: () => void;
   onChange?: (e: { target: { value: string } }) => void;
@@ -154,29 +137,45 @@ const LIBRARY: Exercise[] = [
     isCustom: false,
     notes: '',
   },
+  {
+    id: 'ex-row',
+    name: 'Barbell Row',
+    primaryMuscle: 'back',
+    subMuscle: 'lats',
+    isCustom: false,
+    notes: '',
+  },
 ];
 
-function makeDay(overrides?: Partial<PlanExercise>): PlanDayT {
+const BENCH: PlanExercise = {
+  exerciseId: 'ex-bench',
+  targetSets: 3,
+  targetRepsLow: 8,
+  targetRepsHigh: 12,
+  notes: '',
+};
+
+const ROW: PlanExercise = {
+  exerciseId: 'ex-row',
+  targetSets: 4,
+  targetRepsLow: 6,
+  targetRepsHigh: 10,
+  notes: '',
+};
+
+function makeDay(exercises: PlanExercise[] = [{ ...BENCH }]): PlanDayT {
   return {
     id: 'd1',
     name: 'Push',
     order: 0,
-    exercises: [
-      {
-        exerciseId: 'ex-bench',
-        targetSets: 3,
-        targetRepsLow: 8,
-        targetRepsHigh: 12,
-        notes: '',
-        ...overrides,
-      },
-    ],
+    exercises: exercises.map((e) => ({ ...e })),
   };
 }
 
-describe('PlanDay snapshot re-render race protection (#8)', () => {
+describe('PlanDay snapshot re-render race protection (#8, #12)', () => {
   let container: MinimalElement;
   let root: Root | null = null;
+  const onBack = vi.fn();
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -195,100 +194,95 @@ describe('PlanDay snapshot re-render race protection (#8)', () => {
     vi.useRealTimers();
   });
 
-  it('persists both field A and field B when a Firestore snapshot re-renders before debounce flush', async () => {
-    const onBack = vi.fn();
-    await act(async () => {
-      root!.render(<PlanDay planId="p1" day={makeDay()} library={LIBRARY} onBack={onBack} />);
-    });
+  const numberInputs = () =>
+    findAllByTag(container, 'input').filter(
+      (el) => getReactProps(el).type === 'number',
+    );
 
-    const numberInputs = () =>
-      findAllByTag(container, 'input').filter((el) => getReactProps(el).type === 'number');
-    const notesTextarea = () => findAllByTag(container, 'textarea')[0]!;
-
-    // 1. Edit field A (Sets -> 5) without flushing the 250ms debounce yet.
+  async function renderDay(exercises?: PlanExercise[]) {
     await act(async () => {
-      const setsProps = getReactProps(numberInputs()[0]!);
-      setsProps.onFocus?.();
-      setsProps.onChange?.({ target: { value: '5' } });
+      root!.render(
+        <PlanDay
+          planId="p1"
+          day={makeDay(exercises)}
+          library={LIBRARY}
+          onBack={onBack}
+        />,
+      );
     });
+  }
+
+  async function editField(el: MinimalElement, value: string, blur = false) {
+    await act(async () => {
+      const props = getReactProps(el);
+      props.onFocus?.();
+      props.onChange?.({ target: { value } });
+      if (blur) props.onBlur?.();
+    });
+  }
+
+  it('persists both field A and field B when a snapshot re-renders before debounce flush', async () => {
+    await renderDay();
+    await editField(numberInputs()[0]!, '5');
 
     vi.advanceTimersByTime(100);
     expect(mocks.setDayExercises).not.toHaveBeenCalled();
 
-    // 2. Deliver a Firestore snapshot re-render with pre-patch exercises before debounce flushes.
-    await act(async () => {
-      root!.render(<PlanDay planId="p1" day={makeDay()} library={LIBRARY} onBack={onBack} />);
-    });
+    await renderDay();
+    await editField(numberInputs()[1]!, '6');
+    await editField(findAllByTag(container, 'textarea')[0]!, 'paused');
 
-    // 3. Edit field B (Reps Low -> 6 and Notes -> 'paused') before the debounce flushes.
-    await act(async () => {
-      const repsLowProps = getReactProps(numberInputs()[1]!);
-      repsLowProps.onFocus?.();
-      repsLowProps.onChange?.({ target: { value: '6' } });
-
-      const notesProps = getReactProps(notesTextarea());
-      notesProps.onFocus?.();
-      notesProps.onChange?.({ target: { value: 'paused' } });
-    });
-
-    // 4. Advance timers to flush the debounced write and assert both field A and field B persisted.
     await act(async () => {
       vi.advanceTimersByTime(250);
     });
 
     expect(mocks.setDayExercises).toHaveBeenCalledTimes(1);
     expect(mocks.setDayExercises).toHaveBeenLastCalledWith('p1', 'd1', [
-      {
-        exerciseId: 'ex-bench',
-        targetSets: 5,
-        targetRepsLow: 6,
-        targetRepsHigh: 12,
-        notes: 'paused',
-      },
+      { ...BENCH, targetSets: 5, targetRepsLow: 6, notes: 'paused' },
     ]);
   });
 
-  it('persists field A and field B when a stale snapshot arrives after field A blur before field B edit', async () => {
-    const onBack = vi.fn();
-    await act(async () => {
-      root!.render(<PlanDay planId="p1" day={makeDay()} library={LIBRARY} onBack={onBack} />);
-    });
-
-    const numberInputs = () =>
-      findAllByTag(container, 'input').filter((el) => getReactProps(el).type === 'number');
-
-    // 1. Edit field A (Sets -> 5) and blur immediately to flush.
-    await act(async () => {
-      const setsProps = getReactProps(numberInputs()[0]!);
-      setsProps.onFocus?.();
-      setsProps.onChange?.({ target: { value: '5' } });
-      setsProps.onBlur?.();
-    });
-
+  it('persists field A and field B when a stale snapshot arrives after field A blur', async () => {
+    await renderDay();
+    await editField(numberInputs()[0]!, '5', true);
     expect(mocks.setDayExercises).toHaveBeenCalledTimes(1);
 
-    // 2. A stale snapshot (targetSets still 3) re-renders PlanDay before the write echoes back.
-    await act(async () => {
-      root!.render(<PlanDay planId="p1" day={makeDay()} library={LIBRARY} onBack={onBack} />);
-    });
-
-    // 3. Edit field B (Reps High -> 10) and blur to flush.
-    await act(async () => {
-      const repsHighProps = getReactProps(numberInputs()[2]!);
-      repsHighProps.onFocus?.();
-      repsHighProps.onChange?.({ target: { value: '10' } });
-      repsHighProps.onBlur?.();
-    });
+    await renderDay();
+    await editField(numberInputs()[2]!, '10', true);
 
     expect(mocks.setDayExercises).toHaveBeenCalledTimes(2);
     expect(mocks.setDayExercises).toHaveBeenLastCalledWith('p1', 'd1', [
-      {
-        exerciseId: 'ex-bench',
-        targetSets: 5,
-        targetRepsLow: 8,
-        targetRepsHigh: 10,
-        notes: '',
-      },
+      { ...BENCH, targetSets: 5, targetRepsHigh: 10 },
     ]);
+  });
+
+  it('keeps a pending patch attached to exercise X when a snapshot reorders exercises before flush (#12 F2)', async () => {
+    await renderDay([BENCH, ROW]);
+    await editField(numberInputs()[0]!, '5');
+    await renderDay([ROW, BENCH]);
+
+    await act(async () => {
+      vi.advanceTimersByTime(250);
+    });
+
+    expect(mocks.setDayExercises).toHaveBeenCalledTimes(1);
+    expect(mocks.setDayExercises).toHaveBeenLastCalledWith('p1', 'd1', [
+      { ...ROW },
+      { ...BENCH, targetSets: 5 },
+    ]);
+  });
+
+  it('prunes pending patches when setDayExercises rejects but keeps them while offline pending (#12 F1)', async () => {
+    await renderDay();
+
+    // 1. Offline pending write (never settles) must NOT prune the pending patch.
+    mocks.setDayExercises.mockImplementationOnce(() => new Promise<void>(() => {}));
+    await editField(numberInputs()[0]!, '5', true);
+    expect(getReactProps(numberInputs()[0]!).value).toBe('5');
+
+    // 2. Rejected write must prune the failed patch so UI falls back to persisted value (3).
+    mocks.setDayExercises.mockRejectedValueOnce(new Error('permission-denied'));
+    await editField(numberInputs()[0]!, '7', true);
+    expect(getReactProps(numberInputs()[0]!).value).toBe('3');
   });
 });

@@ -1,10 +1,10 @@
 /**
- * Hook and pure merge helper for `PlanDay` exercise target and structural edits (#8, REQ-002).
+ * Hook and pure merge helper for `PlanDay` exercise target and structural edits (#8, #12, REQ-002).
  * Preserves pending local field patches across intermediate Firestore snapshot re-renders
- * so fast follow-up edits never lose earlier keystrokes.
+ * and rolls back unconfirmed patches only when `setDayExercises` rejects.
  */
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { debounce, setDayExercises } from '../../lib/db';
 import type { Exercise, PlanDay as PlanDayT, PlanExercise } from '../../types';
 
@@ -51,6 +51,7 @@ export function usePlanDayExercises(
   planId: string,
   day: PlanDayT,
 ): UsePlanDayExercisesResult {
+  const [, bumpPatchVersion] = useState(0);
   const prevDayIdRef = useRef(day.id);
   const hasUnflushedWriteRef = useRef(false);
   const pendingPatchesRef = useRef<Map<string, Partial<PlanExercise>>>(
@@ -95,9 +96,35 @@ export function usePlanDayExercises(
 
   const debouncedWrite = useMemo(
     () =>
-      debounce((next: PlanExercise[]) => {
+      debounce((_next: PlanExercise[]) => {
         hasUnflushedWriteRef.current = false;
-        setDayExercises(planId, day.id, next).catch(() => {});
+        const payload = latestExercisesRef.current;
+        const sentPatches = new Map<string, Partial<PlanExercise>>();
+        for (const [k, v] of pendingPatchesRef.current.entries()) {
+          sentPatches.set(k, { ...v });
+        }
+        setDayExercises(planId, day.id, payload).catch(() => {
+          let pruned = false;
+          for (const [key, sent] of sentPatches.entries()) {
+            const current = pendingPatchesRef.current.get(key);
+            if (!current) continue;
+            const nextPatch: Partial<PlanExercise> = { ...current };
+            for (const f of Object.keys(sent) as Array<keyof PlanExercise>) {
+              if (nextPatch[f] === sent[f]) {
+                delete nextPatch[f];
+                pruned = true;
+              }
+            }
+            if (Object.keys(nextPatch).length === 0) {
+              pendingPatchesRef.current.delete(key);
+            } else {
+              pendingPatchesRef.current.set(key, nextPatch);
+            }
+          }
+          if (pruned) {
+            bumpPatchVersion((v) => v + 1);
+          }
+        });
       }, 250),
     [planId, day.id],
   );
@@ -123,6 +150,7 @@ export function usePlanDayExercises(
     });
     const next = current.map((pe, i) => (i === idx ? { ...pe, ...patch } : pe));
     latestExercisesRef.current = next;
+    bumpPatchVersion((v) => v + 1);
     debouncedWrite(next);
   };
 
