@@ -19,6 +19,7 @@ export const sessionDoc = (id: string) => doc(getFirestoreDb(), 'sessions', id);
 
 const exercisesShadow = new Map<string, SessionExercise[]>();
 const seedLocks = new Map<string, Promise<SessionExercise[] | null>>();
+const mutationQueues = new Map<string, Promise<void>>();
 
 /**
  * Deep-clones an array of `SessionExercise` records and their nested `sets`.
@@ -31,14 +32,17 @@ export function cloneExercises(list: SessionExercise[]): SessionExercise[] {
 }
 
 /**
- * Stores an authoritative `exercises` snapshot in memory when no local writes are pending.
+ * Stores an authoritative `exercises` snapshot in memory when no local writes or queued mutations are pending.
  */
 export function syncShadowFromSnapshot(
   sessionId: string,
   exercises: SessionExercise[],
   hasPendingWrites: boolean,
 ): void {
-  if (!hasPendingWrites || !exercisesShadow.has(sessionId)) {
+  if (
+    (!hasPendingWrites && !mutationQueues.has(sessionId)) ||
+    !exercisesShadow.has(sessionId)
+  ) {
     exercisesShadow.set(sessionId, cloneExercises(exercises));
   }
 }
@@ -54,10 +58,11 @@ export function setInitialShadow(
 }
 
 /**
- * Evicts `sessionId` from the in-memory shadow when a workout finishes or aborts.
+ * Evicts `sessionId` from the in-memory shadow and mutation queue when a workout finishes or aborts.
  */
 export function clearShadow(sessionId: string): void {
   exercisesShadow.delete(sessionId);
+  mutationQueues.delete(sessionId);
 }
 
 async function ensureShadow(sessionId: string): Promise<SessionExercise[] | null> {
@@ -85,16 +90,31 @@ async function ensureShadow(sessionId: string): Promise<SessionExercise[] | null
 }
 
 /**
- * Applies `mutator` synchronously to the latest `exercises` shadow and queues `updateDoc`.
+ * Serializes shadow read-modify-write steps per session through a promise queue
+ * so same-tick callers each read the previous mutation without waiting on server acknowledgment.
  */
-export async function mutateSessionExercises(
+export function mutateSessionExercises(
   sessionId: string,
   mutator: (current: SessionExercise[]) => SessionExercise[] | null,
 ): Promise<void> {
-  const current = await ensureShadow(sessionId);
-  if (!current) return;
-  const next = mutator(cloneExercises(current));
-  if (!next) return;
-  exercisesShadow.set(sessionId, next);
-  await updateDoc(sessionDoc(sessionId), { exercises: next });
+  const previous = mutationQueues.get(sessionId) ?? Promise.resolve();
+  const rmwStep = previous.then(async (): Promise<{ write: Promise<void> | null }> => {
+    const current = await ensureShadow(sessionId);
+    if (!current) return { write: null };
+    const latest = exercisesShadow.get(sessionId) ?? current;
+    const next = mutator(cloneExercises(latest));
+    if (!next) return { write: null };
+    exercisesShadow.set(sessionId, next);
+    return { write: updateDoc(sessionDoc(sessionId), { exercises: next }) };
+  });
+  const tracked = rmwStep
+    .catch(() => undefined)
+    .then(() => undefined)
+    .finally(() => {
+      if (mutationQueues.get(sessionId) === tracked) {
+        mutationQueues.delete(sessionId);
+      }
+    });
+  mutationQueues.set(sessionId, tracked);
+  return rmwStep.then((res) => res.write ?? undefined);
 }
