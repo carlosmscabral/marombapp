@@ -1,6 +1,5 @@
 {
   "projects": {
-    "default": "vibe-cabral",
-    "hub": "cabral-scion-hub"
+    "default": "vibe-cabral"
   }
 }

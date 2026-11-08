@@ -1,78 +1,70 @@
 # Cloud Run Deployment Playbook (`marombapp-serving`)
 
-Covers packaging, deploying, verifying, and rolling back `marombapp-serving` on Cloud Run and the isolated `marombapp` Firestore database in `cabral-scion-hub` (`us-central1`) per REQ-002, REQ-003, REQ-004, ADR-001, and ADR-002.
+Covers packaging, building, deploying, verifying, and rolling back `marombapp-serving` on Cloud Run and the isolated `marombapp` Firestore Native database in `vibe-cabral` (`us-central1`) per REQ-002, REQ-003, REQ-004, [ADR-001](../adr/ADR-001-unified-cloud-run-bff-static-pwa-serving.md), and [ADR-004](../adr/ADR-004-co-locate-hub-runtime-and-named-db-in-vibe-cabral.md).
 
 ## Service & IAM Topology
 
-- **GCP Project:** `cabral-scion-hub` (`us-central1`)
-- **Cloud Run Service:** `marombapp-serving` (`https://marombapp-serving-w3ei3fpeiq-uc.a.run.app`)
-- **Runtime Service Account:** `marombapp-run@cabral-scion-hub.iam.gserviceaccount.com`
-- **Cloud Build Service Account:** `projects/cabral-scion-hub/serviceAccounts/cabral-builder@cabral-scion-hub.iam.gserviceaccount.com`
-- **Deployer Identity:** `cabral-agent@cabral-scion-hub.iam.gserviceaccount.com` (holds `roles/run.admin` on `marombapp-serving` and `roles/iam.serviceAccountUser` on both `marombapp-run@` and `cabral-builder@`)
-- **Public Invoker Policy:** `allUsers` already holds `roles/run.invoker` on `marombapp-serving` (verified via `gcloud run services get-iam-policy marombapp-serving`), so `--allow-unauthenticated` is omitted from `gcloud run deploy` to avoid any IAM mutation call.
+- **GCP Project:** `vibe-cabral` (project number `280799742875`, region `us-central1`)
+- **Cloud Run Service:** `marombapp-serving` (`https://marombapp-serving-280799742875.us-central1.run.app`, also `https://marombapp-serving-yozowz6hla-uc.a.run.app`)
+- **Artifact Registry Repository:** `us-central1-docker.pkg.dev/vibe-cabral/marombapp`
+- **Runtime Service Account:** `marombapp-run@vibe-cabral.iam.gserviceaccount.com`
+- **Cloud Build Service Account:** `projects/vibe-cabral/serviceAccounts/vibe-builder@vibe-cabral.iam.gserviceaccount.com` (pass explicitly on every `gcloud builds submit`; default compute SA has no grants)
+- **Deployer Identity:** `marombapp-deployer@vibe-cabral.iam.gserviceaccount.com` (holds `roles/run.developer` + service-scoped `roles/run.admin` on `marombapp-serving`, `roles/cloudbuild.builds.editor`, `roles/artifactregistry.writer`, `roles/datastore.indexAdmin`, `roles/firebaserules.admin`, `roles/firebase.viewer`, and `roles/iam.serviceAccountUser` on `marombapp-run@` and `vibe-builder@`)
 - **Firestore Database & Firebase Config:**
-  - Named Native database `marombapp` (`projects/cabral-scion-hub/databases/marombapp`).
-  - [`firebase.json`](../../firebase.json) uses the array form for `firestore` with `"database": "marombapp"` so `firebase deploy --only firestore` can never target `(default)`.
-  - [`.firebaserc`](../../.firebaserc) keeps `"default": "vibe-cabral"` (so `main` and production promotion remain untouched per ADR-002) and defines `"hub": "cabral-scion-hub"`. Every factory command passes explicit `--project cabral-scion-hub`.
+  - Named Native database `marombapp` (`projects/vibe-cabral/databases/marombapp`).
+  - **HARD RULE ([ADR-004](../adr/ADR-004-co-locate-hub-runtime-and-named-db-in-vibe-cabral.md)):** NEVER deploy rules or indexes to, or write test/evaluation data into, `(default)` (live personal workout history). NEVER run a bare `firebase deploy` (which would hit Firebase Hosting `vibe-cabral.web.app`).
+  - [`firebase.json`](../../firebase.json) uses the array form for `firestore` with `"database": "marombapp"`.
+  - [`.firebaserc`](../../.firebaserc) sets `"default": "vibe-cabral"`. Always pass `--only firestore:marombapp --project vibe-cabral`.
+
+## Step 0: Identity Verification
+
+Before any build or deploy operation, verify the active `gcloud` identity:
+
+```bash
+gcloud auth list --filter=status:ACTIVE --format="value(account)" --quiet
+gcloud config get-value account --quiet
+```
+
+The active account MUST be `marombapp-deployer@vibe-cabral.iam.gserviceaccount.com`. Stop and escalate to `lead` if it does not match.
 
 ## Build Arguments vs. Runtime Environment
 
-- **Build-time (`Dockerfile` `ARG`):**
-  - `VITE_FIREBASE_API_KEY` (default `""`)
-  - `VITE_FIREBASE_AUTH_DOMAIN` (default `""`)
-  - `VITE_FIREBASE_PROJECT_ID` (default `""`)
-  - `VITE_FIREBASE_APP_ID` (default `""`)
-  - `VITE_FIREBASE_ALLOWED_UID` (default `""`)
-  - `VITE_FIRESTORE_DATABASE_ID` (default `"marombapp"`)
+- **Build-time (`Dockerfile` `ARG` passed via Cloud Build):**
+  - `VITE_FIREBASE_API_KEY` (from injected env or `firebase apps:sdkconfig web 1:280799742875:web:e47e00f1afcdab5e92af3e --project vibe-cabral --json`)
+  - `VITE_FIREBASE_AUTH_DOMAIN="vibe-cabral.firebaseapp.com"`
+  - `VITE_FIREBASE_PROJECT_ID="vibe-cabral"`
+  - `VITE_FIREBASE_APP_ID="1:280799742875:web:e47e00f1afcdab5e92af3e"`
+  - `VITE_FIREBASE_ALLOWED_UID="iELlq0wRQhR2F5NmrM6pbMSrJuj1"`
+  - `VITE_FIRESTORE_DATABASE_ID="marombapp"`
 - **Runtime environment (`--set-env-vars` at deploy time, never baked into the image):**
   - `FIRESTORE_DATABASE_ID=marombapp`
-  - `GOOGLE_CLOUD_PROJECT=cabral-scion-hub`
+  - `GOOGLE_CLOUD_PROJECT=vibe-cabral`
+  - `FIREBASE_PROJECT_ID=vibe-cabral`
   - `GOOGLE_CLOUD_LOCATION=global`
-  - `FIREBASE_PROJECT_ID=<per PO #7>` (must equal the Firebase Auth project that issues ID tokens so `firebase-admin` verifies the expected audience, taking precedence over `GOOGLE_CLOUD_PROJECT`)
   - `ALLOWED_UID=iELlq0wRQhR2F5NmrM6pbMSrJuj1`
-
-## Open Item (F1 — Pending PO Decision `#7`)
-
-- **Propagating `VITE_FIREBASE_*` build arguments under `gcloud run deploy --source`:**
-  - `gcloud run deploy --source` invokes Cloud Build (`gcr.io/cloud-builders/docker build`), and `--set-build-env-vars` is documented for Google Cloud Buildpacks rather than `Dockerfile` `ARG` values (unproven for `Dockerfile` builds).
-  - For the interim Release 1 deploy (PO `#7` Option C), the `Dockerfile` default `ARG` values (`VITE_FIRESTORE_DATABASE_ID="marombapp"` and empty `VITE_FIREBASE_*`) are intentional for L1/L2 verification.
-  - Once PO decision `#7` resolves the Firebase web app configuration, verify and standardize the build-arg delivery path before the full end-to-end release (either `gcloud builds submit --config=cloudbuild.yaml` passing `--build-arg VITE_FIREBASE_*=...` followed by `gcloud run deploy --image=...`, or staging a public web-config file in the clean archive directory `$d`) and confirm post-deploy by grepping the served JS bundle for the expected `VITE_FIREBASE_PROJECT_ID`.
 
 ## Firestore Rules & Composite Indexes (`database: marombapp`)
 
-> [!IMPORTANT]
-> **Status: Blocked on PO decision `#7`** (`roles/firebaserules.admin` + `roles/datastore.indexAdmin` IAM bindings for `cabral-agent@` or PO-executed deployment, plus confirmation of the Hub Firebase Auth UID in [`firestore.rules`](../../firestore.rules)).
-
-1. **Deploy Firestore rules and composite indexes to `marombapp` (never `(default)`):**
+1. **Confirm [`firestore.rules`](../../firestore.rules) single-UID guard (`iELlq0wRQhR2F5NmrM6pbMSrJuj1`) and deploy only `firestore:marombapp`:**
    ```bash
-   firebase deploy --only firestore:marombapp --project cabral-scion-hub
+   firebase deploy --only firestore:marombapp --project vibe-cabral --non-interactive
    ```
-   Or create the `sessions` composite index (`status` ASC, `finishedAt` DESC from [`firestore.indexes.json`](../../firestore.indexes.json)) directly via `gcloud`:
-   ```bash
-   gcloud firestore indexes composite create \
-     --project=cabral-scion-hub \
-     --database=marombapp \
-     --collection-group=sessions \
-     --field-config=field-path=status,order=ascending \
-     --field-config=field-path=finishedAt,order=descending \
-     --quiet
-   ```
-2. **Verify composite index and security rules release on `marombapp`:**
+2. **Verify composite index (`sessions`: `status` ASC, `finishedAt` DESC) and rules release on `marombapp` (and confirm `(default)` is untouched):**
    ```bash
    gcloud firestore indexes composite list \
-     --project=cabral-scion-hub \
+     --project=vibe-cabral \
      --database=marombapp \
      --format=json \
      --quiet
 
    curl -sf \
      -H "Authorization: Bearer $(gcloud auth print-access-token)" \
-     "https://firebaserules.googleapis.com/v1/projects/cabral-scion-hub/releases/cloud.firestore/marombapp"
+     "https://firebaserules.googleapis.com/v1/projects/vibe-cabral/releases/cloud.firestore/marombapp"
    ```
 
 ## Step 1: Clean Archive Packaging
 
-Never run `gcloud run deploy --source=/workspace` directly on a workspace checkout, and never archive `HEAD` of a feature branch. Fetch `origin` and export the verified `origin/factory/main` commit via `git archive` to a clean temporary directory:
+Never run `gcloud builds submit` or `gcloud run deploy --source=/workspace` directly on a workspace checkout, and never archive `HEAD` of an unpushed branch. Fetch `origin` and export the verified `origin/factory/main` commit via `git archive` to a clean temporary directory:
 
 ```bash
 git -C /workspace fetch origin && sha=$(git -C /workspace rev-parse origin/factory/main)
@@ -81,41 +73,76 @@ rm -rf "$d" && mkdir -p "$d"
 git -C /workspace archive "$sha" | tar -x -C "$d"
 ```
 
-## Step 2: Deploy to Cloud Run & Route Traffic
+## Step 2: Build Image with Cloud Build (`vibe-builder` SA)
 
-Deploy from the clean archive directory with `--build-service-account` and `--service-account` (`FIREBASE_PROJECT_ID` must equal the Firebase Auth project per PO `#7`; `export FIREBASE_PROJECT_ID=cabral-scion-hub` for the interim Option C deploy):
+Resolve the `vibe-cabral` Firebase web config from environment variables (or `firebase apps:sdkconfig web 1:280799742875:web:e47e00f1afcdab5e92af3e --project vibe-cabral --json`), write a temporary Cloud Build config outside `$d` under `/tmp`, and submit the clean archive directory `$d`:
 
 ```bash
-gcloud run deploy marombapp-serving \
-  --source="$d" \
-  --project=cabral-scion-hub \
+IMAGE="us-central1-docker.pkg.dev/vibe-cabral/marombapp/marombapp-serving:${sha}"
+cat > "/tmp/cloudbuild-${sha}.yaml" <<'EOF'
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--build-arg=VITE_FIREBASE_API_KEY=${_VITE_FIREBASE_API_KEY}'
+      - '--build-arg=VITE_FIREBASE_AUTH_DOMAIN=${_VITE_FIREBASE_AUTH_DOMAIN}'
+      - '--build-arg=VITE_FIREBASE_PROJECT_ID=${_VITE_FIREBASE_PROJECT_ID}'
+      - '--build-arg=VITE_FIREBASE_APP_ID=${_VITE_FIREBASE_APP_ID}'
+      - '--build-arg=VITE_FIREBASE_ALLOWED_UID=${_VITE_FIREBASE_ALLOWED_UID}'
+      - '--build-arg=VITE_FIRESTORE_DATABASE_ID=marombapp'
+      - '-t'
+      - '${_IMAGE}'
+      - '.'
+images:
+  - '${_IMAGE}'
+options:
+  logging: CLOUD_LOGGING_ONLY
+EOF
+
+gcloud builds submit "$d" \
+  --project=vibe-cabral \
   --region=us-central1 \
-  --service-account=marombapp-run@cabral-scion-hub.iam.gserviceaccount.com \
-  --build-service-account=projects/cabral-scion-hub/serviceAccounts/cabral-builder@cabral-scion-hub.iam.gserviceaccount.com \
-  --set-env-vars="FIRESTORE_DATABASE_ID=marombapp,GOOGLE_CLOUD_PROJECT=cabral-scion-hub,GOOGLE_CLOUD_LOCATION=global,FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:?set per PO #7},ALLOWED_UID=iELlq0wRQhR2F5NmrM6pbMSrJuj1" \
+  --config="/tmp/cloudbuild-${sha}.yaml" \
+  --service-account="projects/vibe-cabral/serviceAccounts/vibe-builder@vibe-cabral.iam.gserviceaccount.com" \
+  --substitutions="_IMAGE=${IMAGE},_VITE_FIREBASE_API_KEY=${VITE_FIREBASE_API_KEY:?VITE_FIREBASE_API_KEY is required},_VITE_FIREBASE_AUTH_DOMAIN=${VITE_FIREBASE_AUTH_DOMAIN:-vibe-cabral.firebaseapp.com},_VITE_FIREBASE_PROJECT_ID=${VITE_FIREBASE_PROJECT_ID:-vibe-cabral},_VITE_FIREBASE_APP_ID=${VITE_FIREBASE_APP_ID:-1:280799742875:web:e47e00f1afcdab5e92af3e},_VITE_FIREBASE_ALLOWED_UID=${VITE_FIREBASE_ALLOWED_UID:-iELlq0wRQhR2F5NmrM6pbMSrJuj1}" \
   --quiet
 ```
 
-Unconditionally run `update-traffic --to-latest` after every deploy (idempotent) so any traffic pin left by a prior rollback is cleared (note that `gcloud run deploy` in `gcloud` 589+ does not accept `--to-latest`):
+## Step 3: Deploy to Cloud Run & Route Traffic
+
+Deploy the built Artifact Registry image to `marombapp-serving` under `marombapp-run@vibe-cabral.iam.gserviceaccount.com`:
+
+```bash
+gcloud run deploy marombapp-serving \
+  --image="$IMAGE" \
+  --project=vibe-cabral \
+  --region=us-central1 \
+  --service-account=marombapp-run@vibe-cabral.iam.gserviceaccount.com \
+  --set-env-vars="FIRESTORE_DATABASE_ID=marombapp,GOOGLE_CLOUD_PROJECT=vibe-cabral,FIREBASE_PROJECT_ID=vibe-cabral,GOOGLE_CLOUD_LOCATION=global,ALLOWED_UID=iELlq0wRQhR2F5NmrM6pbMSrJuj1" \
+  --quiet
+```
+
+Unconditionally route 100% of traffic to the latest revision after every deploy so any traffic pin left by a prior rollback is cleared:
 
 ```bash
 gcloud run services update-traffic marombapp-serving \
-  --project=cabral-scion-hub \
+  --project=vibe-cabral \
   --region=us-central1 \
   --to-latest \
   --quiet
 ```
 
-## Step 3: Post-Deploy L1 & L2 Verification
+## Step 4: Post-Deploy L1 & L2 Verification
 
-Immediately after rollout, verify all L1 and L2 contract checks against `SERVICE_URL`:
+Immediately after rollout, verify all L1 and L2 contract checks against `https://marombapp-serving-280799742875.us-central1.run.app`:
 
 1. **L1 Health, Traffic & PWA Assets:**
-   - `gcloud run services describe marombapp-serving --project=cabral-scion-hub --region=us-central1 --format="json(status.traffic)" --quiet` shows `latestRevision: true` at `percent: 100`.
+   - `gcloud run services describe marombapp-serving --project=vibe-cabral --region=us-central1 --format="json(status.traffic)" --quiet` shows `latestRevision: true` at `percent: 100`.
    - `GET /api/healthz` returns HTTP `200` with strict JSON `{"status":"ok","revision":"<revision>","firestoreDatabase":"marombapp","aiReady":true}`.
    - `GET /` returns HTTP `200` HTML (`index.html`).
    - `GET /manifest.webmanifest` returns HTTP `200` (`application/manifest+json`).
    - `GET /sw.js` returns HTTP `200` JavaScript service worker.
+   - Load `/` at `390x844` in headless Playwright and verify the SignIn screen renders with `0` page errors and no `auth/invalid-api-key`, and verify the served JS bundle contains the `vibe-cabral` Firebase web config and zero service-account or Vertex AI credentials.
 2. **L2 Contract Invariants:**
    - `GET /api/auth/session` (no `Authorization` header) returns HTTP `401` JSON.
    - `GET /api/auth/session` (`Authorization: Bearer invalid-token`) returns HTTP `401` JSON.
@@ -123,18 +150,18 @@ Immediately after rollout, verify all L1 and L2 contract checks against `SERVICE
    - `GET /plan` (SPA client route) returns HTTP `200` `index.html`.
    - `GET /api/nope` (unknown API route) returns HTTP `404` JSON (never `index.html`).
 
-## Step 4: Rollback Procedure
+## Step 5: Rollback Procedure
 
 If any L1 or L2 check fails after deployment, immediately route 100% traffic back to the prior healthy revision listed in [../state/LIVE.md](../state/LIVE.md):
 
 ```bash
 gcloud run services update-traffic marombapp-serving \
-  --project=cabral-scion-hub \
+  --project=vibe-cabral \
   --region=us-central1 \
   --to-revisions="<ROLLBACK_REVISION>=100" \
   --quiet
 ```
 
-## Step 5: Promote `LIVE.md`
+## Step 6: Promote `LIVE.md`
 
-After L1 and L2 checks pass, record the new live revision, rollback revision, source commit SHA, and UTC timestamp in [../state/LIVE.md](../state/LIVE.md), verify `python3 knowledge-plane/kp-check.py`, and commit via the commit slot.
+After L1 and L2 checks pass, record the new live revision, rollback revision, source commit SHA, and UTC timestamp in [../state/LIVE.md](../state/LIVE.md), verify `python3 /workspace/knowledge-plane/kp-check.py`, and commit via the commit slot.
