@@ -1,0 +1,20 @@
+# Contracts
+
+Contracts are the source of truth for the L2 contract checks that the evaluation team runs. Change a contract in the
+same work item as the code that implements it.
+
+## Contract files
+
+- None yet. Add OpenAPI, protobuf, or GraphQL files to this directory.
+
+## Endpoints under contract
+
+- `GET /api/healthz`
+- `GET /api/auth/session`
+- `POST /api/ai/*`
+
+## Contract invariants
+
+- Unauthenticated or non-ALLOWED_UID requests to protected /api/* routes return HTTP 401 or 403 with zero downstream Vertex AI calls.
+- GET /api/healthz returns strict JSON { status, revision, firestoreDatabase, aiReady } with HTTP 200.
+- SPA fallback serves index.html for client routes (/analytics, /plan, /library, /in-gym, /start) without breaking /api/* 404/401 JSON responses.
