@@ -9,3 +9,6 @@ coverage/
 !.env.example
 .firebase/
 firebase-debug.log
+dist-e2e/
+test-results/
+playwright-report/
