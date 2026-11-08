@@ -1,3 +1,8 @@
+/**
+ * Training day editor screen.
+ * Reorders exercises, updates set/rep targets with debounced writes, and opens the library picker.
+ */
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
@@ -97,7 +102,6 @@ export function PlanDay({ planId, day, library, onBack }: PlanDayProps) {
       targetSets: 3,
       targetRepsLow: 8,
       targetRepsHigh: 12,
-      restSec: 90,
       notes: '',
     };
     writeExercises([...exercises, newPe]);
@@ -198,19 +202,12 @@ export function PlanDay({ planId, day, library, onBack }: PlanDayProps) {
                 </div>
 
                 {/* Numeric grid */}
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <NumberField
                     label="Sets"
                     value={pe.targetSets}
                     min={1}
                     onChange={(v) => patchExercise(idx, { targetSets: v })}
-                  />
-                  <NumberField
-                    label="Rest (s)"
-                    value={pe.restSec}
-                    min={0}
-                    step={5}
-                    onChange={(v) => patchExercise(idx, { restSec: v })}
                   />
                   <NumberField
                     label="Reps Low"

@@ -1,3 +1,8 @@
+/**
+ * Active workout logger screen.
+ * Tracks live workout sets, progressive-overload history, and session-scoped elapsed rest time.
+ */
+
 import {
   createContext,
   useCallback,
@@ -16,7 +21,6 @@ import {
   Plus,
   Trash2,
   Timer,
-  X,
 } from 'lucide-react';
 import { cn, SignatureBar } from '../components/Layout';
 import { useWakeLock } from '../lib/useWakeLock';
@@ -35,7 +39,6 @@ import {
 import type { Session, SessionExercise, SessionSet } from '../types';
 
 const DEBOUNCE_MS = 250;
-const DEFAULT_REST_SEC = 90;
 
 // How many recent completed sessions to scan, and how many prior executions to
 // show per exercise. 30 covers weekly/twice-weekly exercises cheaply; exercises
@@ -107,39 +110,36 @@ function formatRelative(ts: number): string {
   return formatDateShort(ts);
 }
 
-// Local, non-persisted rest timer. Completing a set calls this with the
-// exercise's target rest so the floating timer can start counting up.
-const StartRestContext = createContext<(targetSec: number) => void>(() => {});
+// Local, non-persisted rest timer. Completing a set invokes this callback so
+// the sticky top bar resets and counts up from zero.
+const StartRestContext = createContext<() => void>(() => {});
 
-// The running timer is kept in sessionStorage (NOT the database) so it survives
-// switching screens and page reloads within the same tab/session. It is keyed
-// by session id so a stale timer never leaks into a different workout, and it
-// naturally disappears when the tab is closed.
+// SessionStorage keeps the running rest timestamp across tab navigation and
+// reloads without writing to Firestore. Keying by session id prevents leaks
+// across workouts, and closing the tab clears the state automatically.
 const REST_KEY = 'maromba.restTimer';
-type RestState = { startedAt: number; targetSec: number };
 
-function loadRest(sessionId: string): RestState | null {
+function loadRest(sessionId: string): number | null {
   try {
     const raw = sessionStorage.getItem(REST_KEY);
     if (!raw) return null;
-    const p = JSON.parse(raw) as Partial<RestState & { sessionId: string }>;
-    if (p.sessionId !== sessionId) return null;
-    if (typeof p.startedAt !== 'number' || typeof p.targetSec !== 'number') return null;
-    return { startedAt: p.startedAt, targetSec: p.targetSec };
+    const p = JSON.parse(raw) as { startedAt?: unknown; sessionId?: unknown };
+    if (p.sessionId !== sessionId || typeof p.startedAt !== 'number') return null;
+    return p.startedAt;
   } catch {
     return null;
   }
 }
 
-function saveRest(sessionId: string, rest: RestState | null): void {
+function saveRest(sessionId: string, startedAt: number | null): void {
   try {
-    if (rest) {
-      sessionStorage.setItem(REST_KEY, JSON.stringify({ ...rest, sessionId }));
+    if (startedAt != null) {
+      sessionStorage.setItem(REST_KEY, JSON.stringify({ startedAt, sessionId }));
     } else {
       sessionStorage.removeItem(REST_KEY);
     }
   } catch {
-    /* storage unavailable — timer just won't survive reloads */
+    /* If sessionStorage is unavailable, the timer still runs in memory. */
   }
 }
 
@@ -155,58 +155,14 @@ function formatElapsed(ms: number): string {
   return `${mm}:${ss}`;
 }
 
-function formatRest(sec: number): string {
-  if (!Number.isFinite(sec) || sec < 0) sec = 0;
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
-
-// One-shot best-effort chime using Web Audio. Returns true if it played.
-function playChime(): boolean {
-  try {
-    const Ctx =
-      window.AudioContext ||
-      (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctx) return false;
-    const ctx = new Ctx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.value = 880;
-    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.6);
-    osc.connect(gain).connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.65);
-    osc.onended = () => {
-      ctx.close().catch(() => {});
-    };
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function vibrate(pattern: number[]): void {
-  try {
-    const nav = navigator as Navigator & { vibrate?: (p: number | number[]) => boolean };
-    nav.vibrate?.(pattern);
-  } catch {
-    /* best-effort */
-  }
-}
-
 interface SetRowProps {
   sessionId: string;
   exerciseIndex: number;
   setIndex: number;
   set: SessionSet;
-  restSec: number;
 }
 
-function SetRow({ sessionId, exerciseIndex, setIndex, set, restSec }: SetRowProps) {
+function SetRow({ sessionId, exerciseIndex, setIndex, set }: SetRowProps) {
   const startRest = useContext(StartRestContext);
   const [weight, setWeight] = useState<string>(
     set.weight ? String(set.weight) : '',
@@ -269,7 +225,7 @@ function SetRow({ sessionId, exerciseIndex, setIndex, set, restSec }: SetRowProp
       completedAt: isComplete ? null : Date.now(),
     });
     if (!isComplete) {
-      startRest(restSec || DEFAULT_REST_SEC);
+      startRest();
     }
   };
 
@@ -413,8 +369,6 @@ function ExerciseCard({ sessionId, exercise, index, history }: ExerciseCardProps
         ? `${exercise.targetRepsLow}+ reps`
         : null;
 
-  const restSec = exercise.restSec ?? DEFAULT_REST_SEC;
-
   return (
     <section className="bg-surface-container-low rounded-xl border-t-4 border-primary overflow-hidden">
       <div className="p-4 space-y-4">
@@ -469,7 +423,6 @@ function ExerciseCard({ sessionId, exercise, index, history }: ExerciseCardProps
               exerciseIndex={index}
               setIndex={sIdx}
               set={s}
-              restSec={restSec}
             />
           ))}
         </div>
@@ -487,93 +440,28 @@ function ExerciseCard({ sessionId, exercise, index, history }: ExerciseCardProps
   );
 }
 
-// Local, non-persisted rest timer. Counts UP from when the last set was
-// completed so the user can see how long they've been resting. The target
-// rest is shown as guidance and the bar chimes once it's reached, but the
-// timer keeps counting so overshoot is visible too.
-function RestTimer({
-  startedAt,
-  targetSec,
-  onDismiss,
-}: {
-  startedAt: number;
-  targetSec: number;
-  onDismiss: () => void;
-}) {
-  const [now, setNow] = useState(() => Date.now());
-  const chimedRef = useRef(false);
-
-  useEffect(() => {
-    // If we're restoring a timer that already passed its target (e.g. after a
-    // reload), don't fire the chime again — only chime on a live crossing.
-    chimedRef.current = Math.floor((Date.now() - startedAt) / 1000) >= targetSec;
-    setNow(Date.now());
-    const id = setInterval(() => setNow(Date.now()), 200);
-    const onVis = () => {
-      if (document.visibilityState === 'visible') setNow(Date.now());
-    };
-    document.addEventListener('visibilitychange', onVis);
-    return () => {
-      clearInterval(id);
-      document.removeEventListener('visibilitychange', onVis);
-    };
-  }, [startedAt, targetSec]);
-
-  const elapsed = Math.max(0, Math.floor((now - startedAt) / 1000));
-  const reached = elapsed >= targetSec;
-
-  useEffect(() => {
-    if (reached && !chimedRef.current) {
-      chimedRef.current = true;
-      playChime();
-      vibrate([100, 50, 100]);
-    }
-  }, [reached]);
-
-  const pct = Math.max(0, Math.min(100, (elapsed / targetSec) * 100));
-
+// Sticky top bar that counts up from the last completed set without enforcing
+// a fixed target duration. Before the first completed set, it stays dimmed at 00:00.
+function RestBar({ elapsedMs, running }: { elapsedMs: number; running: boolean }) {
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 bg-surface-container-high border-t border-outline-variant/20 pb-safe">
-      <div className="h-1 bg-surface-container-low overflow-hidden">
-        <div
-          className={cn(
-            'h-full transition-[width] duration-200 ease-linear',
-            reached ? 'bg-secondary' : 'bg-tertiary-fixed',
-          )}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Timer
-            className={cn(
-              'w-5 h-5',
-              reached ? 'text-secondary' : 'text-tertiary-fixed',
-            )}
-          />
-          <div className="leading-tight">
-            <p className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">
-              {reached ? 'Rest • target reached' : 'Resting'}
-            </p>
-            <p className="font-headline text-2xl font-bold tabular-nums">
-              {formatRest(elapsed)}
-              <span className="text-sm font-semibold text-on-surface-variant/70">
-                {' '}
-                / {formatRest(targetSec)}
-              </span>
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={onDismiss}
-          aria-label="Dismiss rest timer"
-          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-container-low text-on-surface-variant text-xs font-label font-bold uppercase tracking-widest hover:text-primary"
-        >
-          <X className="w-4 h-4" />
-          Done
-        </button>
-      </div>
+    <div className="sticky top-16 z-40 -mx-4 px-4 py-2 bg-surface-container-high/95 backdrop-blur-md border-b border-outline-variant/20 flex items-center gap-3">
+      <Timer
+        className={cn(
+          'w-5 h-5',
+          running ? 'text-tertiary-fixed' : 'text-on-surface-variant/40',
+        )}
+      />
+      <span className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">
+        Rest
+      </span>
+      <span
+        className={cn(
+          'ml-auto font-headline text-2xl font-bold tabular-nums',
+          running ? 'text-on-surface' : 'text-on-surface-variant/40',
+        )}
+      >
+        {formatElapsed(elapsedMs)}
+      </span>
     </div>
   );
 }
@@ -671,42 +559,45 @@ function ActiveSessionView({ session }: { session: Session }) {
 
   // Rest timer state — kept in sessionStorage (not the DB) so it survives
   // navigating between screens and reloads within this tab. Restored on mount.
-  const [rest, setRest] = useState<RestState | null>(() => loadRest(sessionId));
-  const startRest = useCallback(
-    (targetSec: number) => {
-      const next = { startedAt: Date.now(), targetSec };
-      setRest(next);
-      saveRest(sessionId, next);
-    },
-    [sessionId],
+  const [restStartedAt, setRestStartedAt] = useState<number | null>(() =>
+    loadRest(sessionId),
   );
-  const dismissRest = useCallback(() => {
-    setRest(null);
+  const startRest = useCallback(() => {
+    const ts = Date.now();
+    setRestStartedAt(ts);
+    setNow(ts);
+    saveRest(sessionId, ts);
+  }, [sessionId]);
+  const clearRest = useCallback(() => {
+    setRestStartedAt(null);
     saveRest(sessionId, null);
   }, [sessionId]);
 
   const handleFinish = useCallback(async () => {
     if (!confirm('Finish this workout?')) return;
-    dismissRest();
+    clearRest();
     writeSessionNotes.flush();
     await flushPendingWrites();
     await finishSession(sessionId);
     navigate(`/sessions/${sessionId}`);
-  }, [sessionId, writeSessionNotes, navigate, dismissRest]);
+  }, [sessionId, writeSessionNotes, navigate, clearRest]);
 
   const handleAbandon = useCallback(async () => {
     if (!confirm('Abandon this workout? Logged sets will be kept in history.')) return;
-    dismissRest();
+    clearRest();
     writeSessionNotes.flush();
     await flushPendingWrites();
     await abandonSession(sessionId);
-  }, [sessionId, writeSessionNotes, dismissRest]);
+  }, [sessionId, writeSessionNotes, clearRest]);
 
   const elapsedMs = now - session.startedAt;
+  const restElapsedMs = restStartedAt == null ? 0 : Math.max(0, now - restStartedAt);
 
   return (
     <StartRestContext.Provider value={startRest}>
-    <div className="px-4 py-6 space-y-6 max-w-2xl mx-auto w-full pb-32">
+    <div className="px-4 py-6 space-y-6 max-w-2xl mx-auto w-full pb-8">
+      <RestBar elapsedMs={restElapsedMs} running={restStartedAt != null} />
+
       {/* Header */}
       <section className="text-center space-y-2">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-container-highest border border-outline-variant/20">
@@ -788,15 +679,6 @@ function ActiveSessionView({ session }: { session: Session }) {
           Abandon
         </button>
       </div>
-
-      {/* Rest timer overlay (local, non-persisted) */}
-      {rest && (
-        <RestTimer
-          startedAt={rest.startedAt}
-          targetSec={rest.targetSec}
-          onDismiss={dismissRest}
-        />
-      )}
     </div>
     </StartRestContext.Provider>
   );

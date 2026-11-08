@@ -1,3 +1,8 @@
+/**
+ * Firestore data-access layer for plans, exercise library, and workout sessions.
+ * Centralizes real-time snapshot subscriptions, write debouncing, and offline queue flushes.
+ */
+
 import {
   addDoc,
   collection,
@@ -260,7 +265,6 @@ function sessionFromDoc(id: string, data: Record<string, unknown>): Session {
     finishedAt: (data.finishedAt as number | null) ?? null,
     status: (data.status as Session['status']) ?? 'active',
     sessionNotes: (data.sessionNotes as string) ?? '',
-    restTimer: (data.restTimer as Session['restTimer']) ?? null,
     exercises: (data.exercises as SessionExercise[]) ?? [],
   };
 }
@@ -317,7 +321,6 @@ export async function createSession(
       sets: initialSets,
       targetRepsLow: pe.targetRepsLow,
       targetRepsHigh: pe.targetRepsHigh,
-      restSec: pe.restSec,
     };
   });
 
@@ -330,7 +333,6 @@ export async function createSession(
     finishedAt: null,
     status: 'active',
     sessionNotes: '',
-    restTimer: null,
     exercises,
   };
 
@@ -401,24 +403,10 @@ export async function addSetToExercise(
   await updateDoc(sessionDoc(sessionId), { exercises });
 }
 
-export async function startRestTimer(
-  sessionId: string,
-  durationSec: number,
-): Promise<void> {
-  await updateDoc(sessionDoc(sessionId), {
-    restTimer: { startedAt: Date.now(), durationSec },
-  });
-}
-
-export async function clearRestTimer(sessionId: string): Promise<void> {
-  await updateDoc(sessionDoc(sessionId), { restTimer: null });
-}
-
 export async function finishSession(sessionId: string): Promise<void> {
   await updateDoc(sessionDoc(sessionId), {
     finishedAt: Date.now(),
     status: 'completed',
-    restTimer: null,
   });
 }
 
@@ -426,7 +414,6 @@ export async function abandonSession(sessionId: string): Promise<void> {
   await updateDoc(sessionDoc(sessionId), {
     finishedAt: Date.now(),
     status: 'abandoned',
-    restTimer: null,
   });
 }
 

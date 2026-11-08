@@ -1,3 +1,8 @@
+/**
+ * Domain data types and muscle taxonomy for MarombApp.
+ * Defines the shapes stored in Firestore collections (`exercises`, `plans`, `sessions`).
+ */
+
 export const MUSCLE_GROUPS = [
   'chest',
   'back',
@@ -42,7 +47,6 @@ export interface PlanExercise {
   targetSets: number;
   targetRepsLow: number;
   targetRepsHigh: number;
-  restSec: number;
   notes: string;
 }
 
@@ -74,7 +78,6 @@ export interface SessionExercise {
   sets: SessionSet[];
   targetRepsLow?: number;
   targetRepsHigh?: number;
-  restSec?: number;
 }
 
 export type SessionStatus = 'active' | 'completed' | 'abandoned';
@@ -89,6 +92,5 @@ export interface Session {
   finishedAt: number | null;
   status: SessionStatus;
   sessionNotes: string;
-  restTimer: { startedAt: number; durationSec: number } | null;
   exercises: SessionExercise[];
 }
