@@ -1,6 +1,6 @@
 # ADR-002: Named Firestore Database Isolation (`marombapp`) in Hub Project
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR-004 (project placement; named-DB isolation still applies)
 - **Requirements:** REQ-002, REQ-004
 - **Work items:** —
 - **Migrations:** —

@@ -16,6 +16,6 @@ same work item as the code that implements it.
 ## Contract invariants
 
 - Unauthenticated or non-ALLOWED_UID requests to protected /api/* routes return HTTP 401 or 403 with zero downstream Vertex AI calls.
-- Firebase ID token audience verification resolves `FIREBASE_PROJECT_ID` with precedence over `GOOGLE_CLOUD_PROJECT` so Firebase Auth can remain in `vibe-cabral` while Cloud Run and Vertex AI run in `cabral-scion-hub` (`ADR-002`).
+- Firebase ID token audience verification resolves `FIREBASE_PROJECT_ID` with precedence over `GOOGLE_CLOUD_PROJECT` so the token audience is always the Firebase Auth project; Auth, Cloud Run and Vertex AI all run in `vibe-cabral` (`ADR-004`).
 - GET /api/healthz returns strict JSON { status, revision, firestoreDatabase, aiReady } with HTTP 200.
 - SPA fallback serves index.html for client routes (/analytics, /plan, /library, /in-gym, /start) without breaking /api/* 404/401 JSON responses.

@@ -45,7 +45,7 @@ Each requirement has a stable ID. Never renumber an ID; mark it `Withdrawn` inst
 ### Acceptance criteria
 
 - [ ] TypeScript BFF serves compiled `dist/` assets with SPA route fallback (`/analytics`, `/plan`, `/library`, `/in-gym`, `/start`, `/sessions/:id`) and exposes `GET /api/healthz` returning HTTP 200 JSON.
-- [ ] Runs cleanly on Cloud Run `marombapp-serving` (`port: 8080`) under least-privilege `marombapp-run@cabral-scion-hub.iam.gserviceaccount.com`.
+- [ ] Runs cleanly on Cloud Run `marombapp-serving` (`port: 8080`) under least-privilege `marombapp-run@vibe-cabral.iam.gserviceaccount.com` (ADR-004).
 
 ### Work items
 
@@ -59,7 +59,7 @@ Each requirement has a stable ID. Never renumber an ID; mark it `Withdrawn` inst
 ### Acceptance criteria
 
 - [ ] Protected `/api/*` routes verify Firebase ID tokens and reject missing, invalid, or non-`ALLOWED_UID` callers with HTTP 401/403 and zero downstream Vertex AI calls.
-- [ ] `firestore.rules` enforces single-UID access and frontend/BFF support configurable `VITE_FIRESTORE_DATABASE_ID` (`marombapp` in `cabral-scion-hub` vs `(default)` in `vibe-cabral`).
+- [ ] `firestore.rules` enforces single-UID access and frontend/BFF support configurable `VITE_FIRESTORE_DATABASE_ID` (named DB `marombapp` for factory builds and evals vs `(default)` live history, both in `vibe-cabral` per ADR-004).
 
 ### Work items
 

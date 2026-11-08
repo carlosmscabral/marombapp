@@ -28,8 +28,9 @@ These files existed in the repository before the factory started. They stay wher
 | ADR | Title | Status | Requirements |
 |---|---|---|---|
 | [ADR-001](adr/ADR-001-unified-cloud-run-bff-static-pwa-serving.md) | Unified Cloud Run BFF + Static PWA Serving | Accepted | REQ-003, REQ-004, REQ-005 |
-| [ADR-002](adr/ADR-002-named-firestore-database-isolation-marombapp-in-hub-project.md) | Named Firestore Database Isolation (`marombapp`) in Hub Project | Accepted | REQ-002, REQ-004 |
+| [ADR-002](adr/ADR-002-named-firestore-database-isolation-marombapp-in-hub-project.md) | Named Firestore Database Isolation (`marombapp`) in Hub Project | Superseded by ADR-004 | REQ-002, REQ-004 |
 | [ADR-003](adr/ADR-003-re-infrastructure-first-wave-scoping.md) | Re-Infrastructure First Wave Scoping | Accepted | REQ-001, REQ-002, REQ-005, REQ-006 |
+| [ADR-004](adr/ADR-004-co-locate-hub-runtime-and-named-db-in-vibe-cabral.md) | Co-locate Scion Hub, Cloud Run and Named Firestore DB `marombapp` in `vibe-cabral` | Accepted | REQ-002, REQ-003, REQ-004 |
 
 ## Keep this knowledge plane healthy
 

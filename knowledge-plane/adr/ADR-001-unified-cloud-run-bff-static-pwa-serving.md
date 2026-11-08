@@ -11,7 +11,7 @@ MarombApp needs authenticated Vertex AI Gemini capabilities in upcoming waves wi
 
 ## Decision
 
-Serve static Vite PWA assets and authenticated `/api/*` endpoints from a single Node/TypeScript Cloud Run service (`marombapp-serving`) running as `marombapp-run@cabral-scion-hub.iam.gserviceaccount.com`.
+Serve static Vite PWA assets and authenticated `/api/*` endpoints from a single Node/TypeScript Cloud Run service (`marombapp-serving`) running as `marombapp-run@vibe-cabral.iam.gserviceaccount.com` (project placement per ADR-004).
 
 ## Consequences
 
