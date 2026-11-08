@@ -1,0 +1,82 @@
+{
+  "run_id": "eval-20261108-00002-89c",
+  "project_slug": "marombapp",
+  "source": "2f1f585be63f",
+  "source_commit": "2f1f585be63f4957adbacc7bb503281a931547f0",
+  "revision": "marombapp-serving-00002-89c",
+  "service_url": "https://marombapp-serving-w3ei3fpeiq-uc.a.run.app",
+  "evaluator": "domain-evaluator",
+  "issue": 5,
+  "golden_version": "golden-v1.jsonl",
+  "overall_status": "fail",
+  "l1_passed": true,
+  "l2_passed": true,
+  "l3_passed": false,
+  "l4_passed": false,
+  "l5_passed": true,
+  "primary_metric_name": "as_is_functional_parity_pass_rate",
+  "primary_metric_value": 0.0,
+  "primary_metric_target": 1.0,
+  "secondary_metric_name": "modular_architecture_compliance_rate",
+  "secondary_metric_value": 1.0,
+  "p50_ms": 37.7,
+  "p95_ms": 42.1,
+  "p99_ms": 49.9,
+  "latency_endpoint": "GET /api/healthz (5 warmup + N=50, client-side curl time_total incl. TLS)",
+  "latency_secondary": {
+    "endpoint": "GET /api/auth/session (401)",
+    "p50_ms": 38.9,
+    "p95_ms": 46.2,
+    "p99_ms": 49.8
+  },
+  "parity_journeys": {
+    "verified_passing": 0,
+    "total": 8,
+    "reason": "No 390x844 Playwright E2E suite exists in 2f1f585 (npm test = 60 Vitest unit tests only; note #2 slice B landed later in 4787e4d after 00002-89c was deployed). Live app renders a blank #root on every route: uncaught FirebaseError auth/invalid-api-key because the bundle ships an empty Firebase web config (PO decision #7) without a client initialization guard."
+  },
+  "findings": [
+    "F1 (L3, REQ-001): Deployed revision marombapp-serving-00002-89c (source 2f1f585) was built before #2 slice B (4787e4d) landed and contains 0/8 390x844 Playwright E2E parity specs (60 Vitest unit tests only).",
+    "F2 (L3/L4, REQ-002): Live revision white-screens on every route with uncaught FirebaseError (auth/invalid-api-key) at module initialization in src/lib/firebase.ts when VITE_FIREBASE_* build args are empty (pending PO #7), preventing the Auth gate or fallback UI from mounting.",
+    "F3 (L4, REQ-004, ADR-002): firestore.rules and composite index sessions(status ASC, finishedAt DESC) are not deployed to DB marombapp (rules releases: 404, composite indexes: 0). Furthermore, firebase.json firestore block lacks database:'marombapp' while .firebaserc defaults to vibe-cabral, risking accidental production rules deployment.",
+    "F4 (L2/L4, REQ-004, ADR-002): Cloud Run env lacks FIREBASE_PROJECT_ID (audience falls back to GOOGLE_CLOUD_PROJECT=cabral-scion-hub, failing closed) and client bundle bakes empty VITE_FIREBASE_ALLOWED_UID; must be configured alongside PO #7."
+  ],
+  "requirements": [
+    {
+      "id": "REQ-001",
+      "status": "fail",
+      "notes": "In deployed commit 2f1f585, npm test runs 60 Vitest unit tests (8 files, all pass) with 0 Playwright E2E specs (0/8 journeys verified on 2f1f585). (#2 slice B landed subsequently on factory/main at 4787e4d and requires redeployment/verification.)"
+    },
+    {
+      "id": "REQ-002",
+      "status": "blocked",
+      "notes": "Zero unrequested AI UI added; src/screens unchanged since seed 1b268f8; persistentLocalCache + persistentMultipleTabManager preserved; Workbox SW registers and manifest is valid. Live app white-screens on all routes with uncaught auth/invalid-api-key (blocked on PO #7 + unguarded initializeApp/getAuth)."
+    },
+    {
+      "id": "REQ-003",
+      "status": "pass",
+      "notes": "GET /api/healthz returns HTTP 200 strict JSON. SPA fallback returns 200 index.html for /analytics, /plan, /library, /in-gym, /start, /sessions/123. Unknown /api/* returns 404 JSON. Runs on marombapp-serving under marombapp-run@cabral-scion-hub.iam.gserviceaccount.com on port 8080."
+    },
+    {
+      "id": "REQ-004",
+      "status": "partial",
+      "notes": "BFF auth guard passes live (401 JSON on missing/malformed/invalid Bearer tokens) and unit tests verify 403 JSON for non-ALLOWED_UID with zero Vertex AI calls. However, firestore.rules and composite index are not deployed to DB marombapp, firebase.json lacks database:'marombapp', and FIREBASE_PROJECT_ID is unset on Cloud Run."
+    },
+    {
+      "id": "REQ-005",
+      "status": "pass",
+      "notes": "Lazy GoogleGenAI adapter (aiReady=true, location=global) and dormant /api/ai/* boundary behind auth. Live JS/CSS/HTML and built dist/ contain zero private_key, BEGIN PRIVATE, client_email, @google/genai, GoogleGenAI, AIza, or service-account strings."
+    },
+    {
+      "id": "REQ-006",
+      "status": "pass",
+      "notes": "Entrypoints main.tsx (15), App.tsx (81), server/index.ts (27) <=200 lines; max module 290 lines (Analytics.tsx) <=300 lines; 0 import cycles across 48 source files; ASD-STE100 module header docblocks present across all 57 checked files."
+    }
+  ],
+  "commands": {
+    "npm_ci": "exit 0",
+    "npm_run_lint": "exit 0 (check-arch passed, 57 files)",
+    "npm_test": "exit 0 (8 files, 60 tests passed)",
+    "npm_run_build": "exit 0 (vite + tsc server, PWA generateSW 13 precache entries)"
+  },
+  "report_path": "eval_runs/eval-report-00002-89c.md"
+}
