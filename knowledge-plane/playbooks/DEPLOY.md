@@ -46,9 +46,9 @@ rm -rf "$d" && mkdir -p "$d"
 git -C /workspace archive "$sha" | tar -x -C "$d"
 ```
 
-## Step 2: Deploy to Cloud Run (`--to-latest`)
+## Step 2: Deploy to Cloud Run & Route Traffic
 
-Deploy from the clean archive directory with `--build-service-account`, `--service-account`, and `--to-latest` (`FIREBASE_PROJECT_ID` must equal the Firebase Auth project per PO `#7`, defaulting to `cabral-scion-hub` during the interim Option C deploy):
+Deploy from the clean archive directory with `--build-service-account` and `--service-account` (`FIREBASE_PROJECT_ID` must equal the Firebase Auth project per PO `#7`, or may be omitted during the interim Option C deploy when defaulting to `GOOGLE_CLOUD_PROJECT`):
 
 ```bash
 gcloud run deploy marombapp-serving \
@@ -57,7 +57,16 @@ gcloud run deploy marombapp-serving \
   --region=us-central1 \
   --service-account=marombapp-run@cabral-scion-hub.iam.gserviceaccount.com \
   --build-service-account=projects/cabral-scion-hub/serviceAccounts/cabral-builder@cabral-scion-hub.iam.gserviceaccount.com \
-  --set-env-vars="FIRESTORE_DATABASE_ID=marombapp,GOOGLE_CLOUD_PROJECT=cabral-scion-hub,GOOGLE_CLOUD_LOCATION=global,FIREBASE_PROJECT_ID=<per PO #7>,ALLOWED_UID=iELlq0wRQhR2F5NmrM6pbMSrJuj1" \
+  --set-env-vars="FIRESTORE_DATABASE_ID=marombapp,GOOGLE_CLOUD_PROJECT=cabral-scion-hub,GOOGLE_CLOUD_LOCATION=global,FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:?set per PO #7},ALLOWED_UID=iELlq0wRQhR2F5NmrM6pbMSrJuj1" \
+  --quiet
+```
+
+`marombapp-serving` tracks `latestRevision: true` (`100%` traffic) by default, so `gcloud run deploy` routes 100% of traffic to the newly created revision automatically (note that `gcloud run deploy` in `gcloud` 589+ does not accept `--to-latest`). If traffic was previously pinned to a specific revision (for example after a rollback or `--no-traffic` deploy), unpin it to the latest revision with:
+
+```bash
+gcloud run services update-traffic marombapp-serving \
+  --project=cabral-scion-hub \
+  --region=us-central1 \
   --to-latest \
   --quiet
 ```
