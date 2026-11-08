@@ -1,34 +1,19 @@
+/**
+ * Read-only completed workout detail screen (`/sessions/:sessionId`).
+ * Displays workout duration, total volume, set completion count, notes, and per-set breakdown.
+ */
+
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Calendar, CheckCircle2, Circle } from 'lucide-react';
 import { SignatureBar } from '../components/Layout';
 import { getSession } from '../lib/db';
+import { formatDateTime, formatDuration } from '../lib/format';
 import type { Session } from '../types';
 
-function formatDuration(ms: number): string {
-  if (!Number.isFinite(ms) || ms <= 0) return '—';
-  const totalMin = Math.floor(ms / 60000);
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m`;
-  return `${m}m`;
-}
-
-function formatDate(ms: number): string {
-  if (!ms) return '—';
-  try {
-    return new Date(ms).toLocaleString(undefined, {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return new Date(ms).toString();
-  }
-}
-
+/**
+ * Loads and renders a historical workout session by route parameter `sessionId`.
+ */
 export function SessionDetail() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const [session, setSession] = useState<Session | null>(null);
@@ -85,7 +70,7 @@ export function SessionDetail() {
   }
 
   const finishedAt = session.finishedAt ?? session.startedAt;
-  const durationMs = (session.finishedAt ?? session.startedAt) - session.startedAt;
+  const durationMs = finishedAt - session.startedAt;
 
   let totalVolume = 0;
   let completedSets = 0;
@@ -130,7 +115,7 @@ export function SessionDetail() {
             Duration
           </p>
           <p className="font-headline text-xl font-bold mt-1">
-            {formatDuration(durationMs)}
+            {formatDuration(durationMs, true)}
           </p>
         </div>
         <div className="bg-surface-container-low rounded-xl p-3 border-t-4 border-secondary">
@@ -158,8 +143,8 @@ export function SessionDetail() {
       <div className="flex items-center gap-2 text-xs text-on-surface-variant">
         <Calendar className="w-4 h-4" />
         <span>
-          {formatDate(session.startedAt)}
-          {session.finishedAt ? ` → ${formatDate(finishedAt)}` : ''}
+          {formatDateTime(session.startedAt)}
+          {session.finishedAt ? ` → ${formatDateTime(finishedAt)}` : ''}
         </span>
       </div>
 

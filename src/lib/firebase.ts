@@ -1,26 +1,59 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+/**
+ * Lazy Firebase client factories for Authentication and Firestore.
+ * Initializes SDK singletons on first call so module imports stay free of side effects.
+ */
+
+import { initializeApp, type FirebaseApp } from 'firebase/app';
+import { getAuth, type Auth } from 'firebase/auth';
 import {
   initializeFirestore,
   persistentLocalCache,
   persistentMultipleTabManager,
+  type Firestore,
 } from 'firebase/firestore';
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-};
+export const ALLOWED_UID = (import.meta.env.VITE_FIREBASE_ALLOWED_UID as string) ?? '';
 
-export const app = initializeApp(firebaseConfig);
+let appInstance: FirebaseApp | null = null;
+let authInstance: Auth | null = null;
+let dbInstance: Firestore | null = null;
 
-export const auth = getAuth(app);
+/**
+ * Returns the shared FirebaseApp instance, creating it on first access.
+ */
+export function getFirebaseApp(): FirebaseApp {
+  if (!appInstance) {
+    appInstance = initializeApp({
+      apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+      authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+      projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+      appId: import.meta.env.VITE_FIREBASE_APP_ID,
+    });
+  }
+  return appInstance;
+}
 
-export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager(),
-  }),
-});
+/**
+ * Returns the shared Firebase Auth client.
+ */
+export function getFirebaseAuth(): Auth {
+  if (!authInstance) {
+    authInstance = getAuth(getFirebaseApp());
+  }
+  return authInstance;
+}
 
-export const ALLOWED_UID = import.meta.env.VITE_FIREBASE_ALLOWED_UID as string;
+/**
+ * Returns the shared Firestore client configured with multi-tab IndexedDB persistence.
+ * Multi-tab persistence queues offline writes locally during spotty gym connectivity.
+ */
+export function getFirestoreDb(): Firestore {
+  if (!dbInstance) {
+    dbInstance = initializeFirestore(getFirebaseApp(), {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
+    });
+  }
+  return dbInstance;
+}

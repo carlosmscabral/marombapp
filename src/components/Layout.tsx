@@ -1,18 +1,29 @@
-import { ReactNode, useEffect, useRef, useState } from 'react';
+/**
+ * Application shell layout, navigation chrome, and Tailwind class merger.
+ * Renders the sticky top bar, active-session resume banner, and mobile bottom navigation.
+ */
+
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { Calendar, Dumbbell, Library, BarChart2, LogOut } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useAuth } from '../lib/auth';
-import { useActiveSession } from '../App';
+import { useActiveSession } from '../lib/activeSession';
 
+/**
+ * Merges conditional class names and resolves conflicting Tailwind utilities.
+ */
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/**
+ * Renders the four-color editorial accent bar atop cards and sheets.
+ */
 export function SignatureBar({ className }: { className?: string }) {
   return (
-    <div className={cn("signature-bar", className)}>
+    <div className={cn('signature-bar', className)}>
       <div className="bar-blue"></div>
       <div className="bar-red"></div>
       <div className="bar-yellow"></div>
@@ -85,7 +96,10 @@ function AccountMenu() {
   );
 }
 
-export function TopAppBar({ title, rightContent }: { title: string, rightContent?: ReactNode }) {
+/**
+ * Sticky top header with brand icon, title, and user account menu.
+ */
+export function TopAppBar({ title, rightContent }: { title: string; rightContent?: ReactNode }) {
   return (
     <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-outline-variant/15 px-4 h-16 flex items-center justify-between">
       <div className="flex items-center gap-3">
@@ -113,6 +127,9 @@ function ActiveSessionBanner() {
   );
 }
 
+/**
+ * Fixed four-tab bottom navigation bar with active-session pulse indicator.
+ */
 export function BottomNavBar() {
   const location = useLocation();
   const { activeSession } = useActiveSession();
@@ -128,7 +145,9 @@ export function BottomNavBar() {
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-surface-container-low border-t border-outline-variant/10 px-6 py-3 flex justify-between items-center z-50 pb-safe">
       {navItems.map((item) => {
-        const isActive = location.pathname === item.path || (location.pathname === '/' && item.path === '/analytics');
+        const isActive =
+          location.pathname === item.path ||
+          (location.pathname === '/' && item.path === '/analytics');
         const Icon = item.icon;
         const showDot = hasActive && item.path === '/in-gym';
 
@@ -137,15 +156,13 @@ export function BottomNavBar() {
             key={item.path}
             to={item.path}
             className={cn(
-              "flex flex-col items-center gap-1 group relative",
-              isActive ? "text-primary" : "text-outline hover:text-primary transition-colors"
+              'flex flex-col items-center gap-1 group relative',
+              isActive ? 'text-primary' : 'text-outline hover:text-primary transition-colors',
             )}
           >
-            {isActive && (
-              <div className="absolute -top-3 w-8 h-1 bg-primary rounded-full"></div>
-            )}
+            {isActive && <div className="absolute -top-3 w-8 h-1 bg-primary rounded-full"></div>}
             <div className="relative">
-              <Icon className={cn("w-6 h-6", isActive && "fill-primary/20")} />
+              <Icon className={cn('w-6 h-6', isActive && 'fill-primary/20')} />
               {showDot && (
                 <span className="absolute -top-1 -right-1 flex w-2.5 h-2.5">
                   <span className="absolute inset-0 rounded-full bg-error opacity-75 animate-ping"></span>
@@ -153,10 +170,12 @@ export function BottomNavBar() {
                 </span>
               )}
             </div>
-            <span className={cn(
-              "text-[10px] font-label uppercase tracking-widest",
-              isActive ? "font-bold" : "font-medium"
-            )}>
+            <span
+              className={cn(
+                'text-[10px] font-label uppercase tracking-widest',
+                isActive ? 'font-bold' : 'font-medium',
+              )}
+            >
               {item.label}
             </span>
           </NavLink>
@@ -166,7 +185,18 @@ export function BottomNavBar() {
   );
 }
 
-export function Layout({ children, title = "MarombApp", rightContent }: { children: ReactNode, title?: string, rightContent?: ReactNode }) {
+/**
+ * Wraps authenticated routes with top bar, scrollable main area, and bottom navigation.
+ */
+export function Layout({
+  children,
+  title = 'MarombApp',
+  rightContent,
+}: {
+  children: ReactNode;
+  title?: string;
+  rightContent?: ReactNode;
+}) {
   const location = useLocation();
   const { activeSession } = useActiveSession();
   const showBanner = Boolean(activeSession) && location.pathname !== '/in-gym';
@@ -174,9 +204,7 @@ export function Layout({ children, title = "MarombApp", rightContent }: { childr
   return (
     <div className="flex flex-col min-h-screen">
       <TopAppBar title={title} rightContent={rightContent} />
-      <main className={cn("flex-1", showBanner ? "pb-32" : "pb-24")}>
-        {children}
-      </main>
+      <main className={cn('flex-1', showBanner ? 'pb-32' : 'pb-24')}>{children}</main>
       {showBanner && <ActiveSessionBanner />}
       <BottomNavBar />
     </div>

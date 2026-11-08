@@ -1,7 +1,15 @@
+/**
+ * Google Sign-In screen for MarombApp.
+ * Displays authorization errors when an unlisted Google account signs in.
+ */
+
 import { Dumbbell, AlertCircle } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { SignatureBar } from '../components/Layout';
 
+/**
+ * Renders the single-user authentication gate.
+ */
 export function SignIn() {
   const { signIn, error, loading } = useAuth();
 

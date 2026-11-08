@@ -1,77 +1,71 @@
+/**
+ * Workout day selector screen (`/start`).
+ * Redirects to `/in-gym` if a session is already active, or starts a new session pre-filled from history.
+ */
+
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ChevronRight, Dumbbell, Play } from 'lucide-react';
 import { SignatureBar } from '../components/Layout';
+import { useActiveSession } from '../lib/activeSession';
 import {
   createSession,
   subscribeActivePlan,
-  subscribeActiveSession,
   subscribeLibrary,
   subscribePlanDays,
+  subscribeRecentSessions,
 } from '../lib/db';
+import { buildHistoryMap, HISTORY_WINDOW } from '../lib/history';
 import type { Exercise, Plan, PlanDay, Session } from '../types';
 
+/**
+ * Lists training days for the active plan and creates a new workout session on selection.
+ */
 export function StartWorkout() {
   const navigate = useNavigate();
+  const { activeSession, loading: sessionLoading } = useActiveSession();
   const [plan, setPlan] = useState<Plan | null>(null);
   const [days, setDays] = useState<PlanDay[]>([]);
   const [library, setLibrary] = useState<Exercise[]>([]);
-  const [activeSession, setActiveSession] = useState<Session | null>(null);
+  const [recentSessions, setRecentSessions] = useState<Session[]>([]);
   const [planReady, setPlanReady] = useState(false);
-  const [sessionReady, setSessionReady] = useState(false);
   const [creatingDayId, setCreatingDayId] = useState<string | null>(null);
 
-  // Subscribe to active plan.
   useEffect(() => {
-    const unsub = subscribeActivePlan((p) => {
+    return subscribeActivePlan((p) => {
       setPlan(p);
       setPlanReady(true);
     });
-    return () => unsub();
   }, []);
 
-  // Subscribe to the active plan's days.
   useEffect(() => {
     if (!plan) {
       setDays([]);
       return;
     }
-    const unsub = subscribePlanDays(plan.id, setDays);
-    return () => unsub();
+    return subscribePlanDays(plan.id, setDays);
   }, [plan]);
 
-  // Subscribe to the library (for denormalized exercise names).
-  useEffect(() => {
-    const unsub = subscribeLibrary(setLibrary);
-    return () => unsub();
-  }, []);
-
-  // Subscribe to active session — if one exists, jump straight to In-Gym.
-  useEffect(() => {
-    const unsub = subscribeActiveSession((s) => {
-      setActiveSession(s);
-      setSessionReady(true);
-    });
-    return () => unsub();
-  }, []);
+  useEffect(() => subscribeLibrary(setLibrary), []);
+  useEffect(() => subscribeRecentSessions(HISTORY_WINDOW, setRecentSessions), []);
 
   useEffect(() => {
-    if (sessionReady && activeSession) {
+    if (!sessionLoading && activeSession) {
       navigate('/in-gym', { replace: true });
     }
-  }, [sessionReady, activeSession, navigate]);
+  }, [sessionLoading, activeSession, navigate]);
 
   const libIndex = useMemo(
     () => new Map(library.map((e) => [e.id, e] as const)),
     [library],
   );
+  const historyMap = useMemo(() => buildHistoryMap(recentSessions), [recentSessions]);
 
   const handlePickDay = async (day: PlanDay) => {
-    if (!plan) return;
-    if (creatingDayId) return;
+    if (!plan || creatingDayId) return;
     setCreatingDayId(day.id);
     try {
-      await createSession(plan, day, library);
+      await createSession(plan, day, library, historyMap);
       navigate('/in-gym');
     } catch (err) {
       console.error('createSession failed', err);
@@ -79,7 +73,7 @@ export function StartWorkout() {
     }
   };
 
-  if (!planReady || !sessionReady) {
+  if (!planReady || sessionLoading) {
     return (
       <div className="px-4 py-12 text-center font-label text-sm text-on-surface-variant uppercase tracking-widest">
         Loading…
@@ -87,7 +81,6 @@ export function StartWorkout() {
     );
   }
 
-  // If there is an active session we are about to redirect — render minimal UI.
   if (activeSession) {
     return (
       <div className="px-4 py-12 max-w-2xl mx-auto text-center space-y-4">
@@ -108,13 +101,13 @@ export function StartWorkout() {
   if (!plan) {
     return (
       <div className="px-4 py-12 max-w-2xl mx-auto flex flex-col items-center text-center gap-6">
-        <div className="w-20 h-20 rounded-2xl bg-surface-container-low flex items-center justify-center border-t-4 border-secondary">
-          <Dumbbell className="w-10 h-10 text-secondary" />
+        <div className="w-20 h-20 rounded-2xl bg-surface-container-low flex items-center justify-center border-t-4 border-primary">
+          <Dumbbell className="w-10 h-10 text-primary" />
         </div>
         <div className="space-y-2">
           <h2 className="font-headline text-2xl font-bold">No active plan</h2>
           <p className="text-sm text-on-surface-variant">
-            Set a plan as active before starting a workout.
+            Create a training plan and mark it active before starting a workout.
           </p>
         </div>
         <Link
@@ -152,22 +145,23 @@ export function StartWorkout() {
       ) : (
         <ul className="space-y-3">
           {days.map((day) => {
-            const exCount = day.exercises.length;
-            const setCount = day.exercises.reduce(
-              (sum, e) => sum + (e.targetSets || 0),
+            const count = day.exercises.length;
+            const totalSets = day.exercises.reduce(
+              (sum, pe) => sum + (pe.targetSets || 0),
               0,
             );
             const preview = day.exercises
               .slice(0, 3)
-              .map((e) => libIndex.get(e.exerciseId)?.name ?? 'Exercise')
+              .map((pe) => libIndex.get(pe.exerciseId)?.name ?? 'Exercise')
               .join(' • ');
             const isCreating = creatingDayId === day.id;
+
             return (
               <li key={day.id}>
                 <button
                   type="button"
                   onClick={() => void handlePickDay(day)}
-                  disabled={isCreating || exCount === 0}
+                  disabled={isCreating || count === 0}
                   className="w-full text-left bg-surface-container-low hover:bg-surface-container-high transition-colors rounded-xl overflow-hidden border-t-4 border-primary disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <div className="p-5 flex items-center justify-between gap-4">
@@ -176,13 +170,13 @@ export function StartWorkout() {
                         {day.name}
                       </h3>
                       <p className="text-xs font-label text-on-surface-variant">
-                        {exCount} {exCount === 1 ? 'exercise' : 'exercises'}
-                        {setCount ? ` • ${setCount} sets` : ''}
+                        {count} {count === 1 ? 'exercise' : 'exercises'}
+                        {totalSets ? ` • ${totalSets} sets` : ''}
                       </p>
                       {preview && (
                         <p className="text-xs text-on-surface-variant/70 truncate">
                           {preview}
-                          {exCount > 3 ? ' …' : ''}
+                          {count > 3 ? ' …' : ''}
                         </p>
                       )}
                     </div>

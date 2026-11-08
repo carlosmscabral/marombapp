@@ -1,65 +1,34 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+/**
+ * Root composition component (`App`).
+ * Wires authentication, global active-session state, library seeding, and route-level code splitting.
+ */
+
+import { lazy, Suspense, useEffect } from 'react';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Layout } from './components/Layout';
-import { Analytics } from './screens/Analytics';
-import { Plan } from './screens/Plan';
-import { Library } from './screens/Library';
-import { InGym } from './screens/InGym';
-import { StartWorkout } from './screens/StartWorkout';
-import { SessionDetail } from './screens/SessionDetail';
-import { SignIn } from './screens/SignIn';
+import { ActiveSessionProvider } from './lib/activeSession';
 import { AuthProvider, useAuth } from './lib/auth';
 import { seedLibraryIfEmpty } from './lib/seed';
-import { subscribeActiveSession } from './lib/db';
-import type { Session } from './types';
+import { InGym } from './screens/InGym';
+import { Library } from './screens/Library';
+import { Plan } from './screens/Plan';
+import { SessionDetail } from './screens/SessionDetail';
+import { SignIn } from './screens/SignIn';
+import { StartWorkout } from './screens/StartWorkout';
 
-// ---------- Active session context ----------------------------------------
+const Analytics = lazy(() => import('./screens/Analytics'));
 
-interface ActiveSessionContextValue {
-  activeSession: Session | null;
-  loading: boolean;
-}
-
-const ActiveSessionContext = createContext<ActiveSessionContextValue>({
-  activeSession: null,
-  loading: true,
-});
-
-export function useActiveSession(): ActiveSessionContextValue {
-  return useContext(ActiveSessionContext);
-}
-
-function ActiveSessionProvider({ children }: { children: ReactNode }) {
-  const [activeSession, setActiveSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const unsub = subscribeActiveSession((s) => {
-      setActiveSession(s);
-      setLoading(false);
-    });
-    return unsub;
-  }, []);
-
+function RouteLoader() {
   return (
-    <ActiveSessionContext.Provider value={{ activeSession, loading }}>
-      {children}
-    </ActiveSessionContext.Provider>
+    <div className="px-4 py-12 text-center font-label text-sm text-on-surface-variant uppercase tracking-widest">
+      Loading…
+    </div>
   );
 }
 
-// ---------- Authed app shell ----------------------------------------------
-
 function AuthedApp() {
   useEffect(() => {
-    // Fire-and-forget; safe to call on every mount because it's a no-op
-    // when the library already has entries.
+    // Seed runs once on empty projects and acts as a no-op thereafter.
     seedLibraryIfEmpty().catch((err) => {
       console.warn('Library seed skipped:', err);
     });
@@ -69,16 +38,18 @@ function AuthedApp() {
     <BrowserRouter>
       <ActiveSessionProvider>
         <Layout>
-          <Routes>
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/plan" element={<Plan />} />
-            <Route path="/library" element={<Library />} />
-            <Route path="/in-gym" element={<InGym />} />
-            <Route path="/start" element={<StartWorkout />} />
-            <Route path="/sessions/:sessionId" element={<SessionDetail />} />
-            <Route path="/" element={<Navigate to="/analytics" replace />} />
-            <Route path="*" element={<Navigate to="/analytics" replace />} />
-          </Routes>
+          <Suspense fallback={<RouteLoader />}>
+            <Routes>
+              <Route path="/analytics" element={<Analytics />} />
+              <Route path="/plan" element={<Plan />} />
+              <Route path="/library" element={<Library />} />
+              <Route path="/in-gym" element={<InGym />} />
+              <Route path="/start" element={<StartWorkout />} />
+              <Route path="/sessions/:sessionId" element={<SessionDetail />} />
+              <Route path="/" element={<Navigate to="/analytics" replace />} />
+              <Route path="*" element={<Navigate to="/analytics" replace />} />
+            </Routes>
+          </Suspense>
         </Layout>
       </ActiveSessionProvider>
     </BrowserRouter>
@@ -98,6 +69,9 @@ function Gate() {
   return <AuthedApp />;
 }
 
+/**
+ * Mounts the authentication provider and renders either `SignIn` or the authenticated app shell.
+ */
 export default function App() {
   return (
     <AuthProvider>
