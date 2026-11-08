@@ -1,0 +1,20 @@
+# Excludes local dependencies, build outputs, secrets, and test artifacts from the Docker build context.
+
+.git
+.gitignore
+.github
+.agents
+.scion
+.scion-volumes
+node_modules
+dist
+dist-server
+coverage
+playwright-report
+test-results
+.env
+.env.*
+!.env.example
+*.log
+tests
+knowledge-plane
