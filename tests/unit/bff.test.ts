@@ -15,7 +15,7 @@ import { createBffServer } from '../../server/app.js';
 import * as firebaseVerifier from '../../server/auth/firebaseVerifier.js';
 import { getServerConfig, resolveFirebaseAdminProjectId } from '../../server/config.js';
 
-describe('MarombApp Cloud Run BFF (REQ-003, REQ-004, REQ-005, ADR-001, ADR-002)', () => {
+describe('MarombApp Cloud Run BFF (REQ-003, REQ-004, REQ-005, ADR-001, ADR-002, ADR-004)', () => {
   let tempDistDir = '';
   let baseUrl = '';
   let closeServer: (() => Promise<void>) | null = null;
@@ -98,7 +98,7 @@ describe('MarombApp Cloud Run BFF (REQ-003, REQ-004, REQ-005, ADR-001, ADR-002)'
 
     process.env.K_REVISION = 'marombapp-serving-00007-xyz';
     process.env.FIRESTORE_DATABASE_ID = 'marombapp';
-    process.env.GOOGLE_CLOUD_PROJECT = 'cabral-scion-hub';
+    process.env.GOOGLE_CLOUD_PROJECT = 'run-project';
     process.env.GOOGLE_CLOUD_LOCATION = 'global';
 
     const configuredRes = await fetch(`${baseUrl}/api/healthz`);
@@ -228,41 +228,41 @@ describe('MarombApp Cloud Run BFF (REQ-003, REQ-004, REQ-005, ADR-001, ADR-002)'
   it('gives FIREBASE_PROJECT_ID precedence over GOOGLE_CLOUD_PROJECT for Firebase Admin audience verification', () => {
     expect(
       resolveFirebaseAdminProjectId({
-        FIREBASE_PROJECT_ID: '  vibe-cabral  ',
-        GOOGLE_CLOUD_PROJECT: 'cabral-scion-hub',
+        FIREBASE_PROJECT_ID: '  auth-project  ',
+        GOOGLE_CLOUD_PROJECT: 'run-project',
         VITE_FIREBASE_PROJECT_ID: 'vite-fallback',
       }),
-    ).toBe('vibe-cabral');
+    ).toBe('auth-project');
 
     expect(
       resolveFirebaseAdminProjectId({
         FIREBASE_PROJECT_ID: '   ',
-        GOOGLE_CLOUD_PROJECT: 'cabral-scion-hub',
+        GOOGLE_CLOUD_PROJECT: 'run-project',
         VITE_FIREBASE_PROJECT_ID: 'vite-fallback',
       }),
-    ).toBe('cabral-scion-hub');
+    ).toBe('run-project');
 
     expect(
       resolveFirebaseAdminProjectId({
-        VITE_FIREBASE_PROJECT_ID: 'vibe-cabral',
+        VITE_FIREBASE_PROJECT_ID: 'auth-project',
       }),
-    ).toBe('vibe-cabral');
+    ).toBe('auth-project');
 
     expect(resolveFirebaseAdminProjectId({})).toBeUndefined();
 
     const cfg = getServerConfig({
-      FIREBASE_PROJECT_ID: 'vibe-cabral',
-      GOOGLE_CLOUD_PROJECT: 'cabral-scion-hub',
+      FIREBASE_PROJECT_ID: 'auth-project',
+      GOOGLE_CLOUD_PROJECT: 'run-project',
     });
-    expect(cfg.firebaseProjectId).toBe('vibe-cabral');
-    expect(cfg.googleCloudProject).toBe('cabral-scion-hub');
+    expect(cfg.firebaseProjectId).toBe('auth-project');
+    expect(cfg.googleCloudProject).toBe('run-project');
   });
 
   it('lazily constructs the Vertex AI client only when getVertexClient is called', () => {
     delete process.env.GOOGLE_CLOUD_PROJECT;
     expect(() => vertexAdapter.getVertexClient()).toThrow(/GOOGLE_CLOUD_PROJECT/);
 
-    process.env.GOOGLE_CLOUD_PROJECT = 'cabral-scion-hub';
+    process.env.GOOGLE_CLOUD_PROJECT = 'run-project';
     process.env.GOOGLE_CLOUD_LOCATION = 'global';
     const client = vertexAdapter.getVertexClient();
     expect(client).toBeDefined();

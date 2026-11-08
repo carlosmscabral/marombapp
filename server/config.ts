@@ -17,8 +17,8 @@ export interface BffRuntimeConfig {
 
 /**
  * Resolves the Firebase Auth project ID used for ID token audience verification.
- * Gives FIREBASE_PROJECT_ID precedence over GOOGLE_CLOUD_PROJECT so Firebase Auth
- * can remain in vibe-cabral while Cloud Run and Vertex AI run in cabral-scion-hub.
+ * Gives FIREBASE_PROJECT_ID precedence over GOOGLE_CLOUD_PROJECT for token audience;
+ * Auth, Cloud Run and Vertex AI all live in vibe-cabral (ADR-004).
  */
 export function resolveFirebaseAdminProjectId(
   env: NodeJS.ProcessEnv = process.env,
