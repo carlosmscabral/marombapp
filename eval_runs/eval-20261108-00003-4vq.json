@@ -1,0 +1,82 @@
+{
+  "run_id": "eval-20261108-00003-4vq",
+  "project_slug": "marombapp",
+  "source": "6f3d1ce8adde",
+  "source_commit": "6f3d1ce8adde8fae306ba0338e8617e1831cbce7",
+  "revision": "marombapp-serving-00003-4vq",
+  "service_url": "https://marombapp-serving-w3ei3fpeiq-uc.a.run.app",
+  "evaluator": "domain-evaluator",
+  "issue": 5,
+  "reverified_issues": [9, 10],
+  "golden_version": "golden-v1.jsonl",
+  "overall_status": "fail",
+  "overall_status_reason": "L4-01 is not met. firestore.rules and the composite index are still undeployed on DB marombapp (#10 Part 2, blocked on PO #7). L1, L2, L3 and L5 pass.",
+  "l1_passed": true,
+  "l2_passed": true,
+  "l3_passed": true,
+  "l4_passed": false,
+  "l5_passed": true,
+  "primary_metric_name": "as_is_functional_parity_pass_rate",
+  "primary_metric_value": 1.0,
+  "primary_metric_target": 1.0,
+  "primary_metric_basis": "390x844 Playwright parity suite in 6f3d1ce: 34/34 tests pass and cover 8/8 golden-v1 journeys (L3-J1..J8). It runs against e2e-only Firebase fakes. Live authenticated journeys J2-J8 await PO #7.",
+  "e2e_parity_pass_rate": 1.0,
+  "e2e_tests": {"passed": 34, "failed": 0, "skipped": 0, "duration": "2.5m", "workers": 2, "viewport": "390x844"},
+  "live_parity": {
+    "J1_auth_gate_unauthenticated": "pass",
+    "J1_allowed_uid_entry": "blocked (PO #7: empty VITE_FIREBASE_* web config)",
+    "J2_J8": "blocked (PO #7)",
+    "detail": "All 7 routes return 200, #root mounts SignIn (2284 chars), 0 pageerror, 0 nav elements, auth/invalid-api-key shown inline. Clicking Sign in shows the error again with no crash. Service worker registers."
+  },
+  "secondary_metric_name": "modular_architecture_compliance_rate",
+  "secondary_metric_value": 1.0,
+  "p50_ms": 52.4,
+  "p95_ms": 73.1,
+  "p99_ms": 92.1,
+  "latency_endpoint": "GET /api/healthz (5 warmup + N=50 sequential curl, client-side time_total incl. new TLS per request)",
+  "latency_secondary": {"endpoint": "GET /api/auth/session (401)", "p50_ms": 54.7, "p95_ms": 89.0, "p99_ms": 90.1},
+  "golden_results": [
+    {"probe_id": "L1-01", "status": "pass", "notes": "200 {status:ok, revision:marombapp-serving-00003-4vq, firestoreDatabase:marombapp, aiReady:true}"},
+    {"probe_id": "L1-02", "status": "pass", "notes": "/, manifest and sw.js return 200. The service worker registers in Chromium."},
+    {"probe_id": "L2-01", "status": "pass", "notes": "Live 401 JSON for no token, invalid token, Basic, alg:none JWT, OPTIONS. The unit test bff.test.ts covers the 403 for a non-ALLOWED_UID caller with zero Vertex calls."},
+    {"probe_id": "L2-02", "status": "pass", "notes": "7 client routes plus an unknown route return byte-identical index.html. /api/unknown, /api, /api/healthz/ return 404 JSON. POST /api/healthz returns 405 JSON."},
+    {"probe_id": "L3-J1", "status": "pass", "notes": "auth.spec 8/8. Live unauthenticated gate passes. Live ALLOWED_UID entry is blocked on PO #7."},
+    {"probe_id": "L3-J2", "status": "pass", "notes": "library.spec 5/5 (66 seed once after reload, filter/search, read-only built-ins, custom CRUD, reload survival)."},
+    {"probe_id": "L3-J3", "status": "pass", "notes": "plan.spec 4/4 (active plan, day order and arrows, targets/notes/order/name, rename/switch/archive)."},
+    {"probe_id": "L3-J4", "status": "pass", "notes": "in-gym-logging and in-gym-start (session create, add/remove sets and exercises, notes, finish, abandon, serialized session shadow)."},
+    {"probe_id": "L3-J5", "status": "pass", "notes": "in-gym-logging: rest bar counts up, survives page.reload(), restarts on next set (fake clock)."},
+    {"probe_id": "L3-J6", "status": "pass", "notes": "in-gym-start: exactly 3 last executions newest first, incomplete sets hidden, pre-fill values asserted."},
+    {"probe_id": "L3-J7", "status": "pass", "notes": "analytics.spec: empty states, weekly totals, muscle split, overload chart, lazy chunk loads on demand."},
+    {"probe_id": "L3-J8", "status": "pass", "notes": "analytics.spec: session detail opens, back link works, incomplete sets and not-found state shown."},
+    {"probe_id": "L3-ARCH", "status": "pass", "notes": "Entrypoints 15/81/27 lines, max module 290, 0 cycles in 48 source files, all files have a leading docblock. check:arch passes (72 files)."},
+    {"probe_id": "L4-01", "status": "fail", "notes": "No secrets in bundles (pass). firebase.json targets marombapp (pass). Rules release and composite index NOT deployed on DB marombapp (fail; blocked on PO #7)."},
+    {"probe_id": "L4-02", "status": "pass", "notes": "No AI UI. persistentLocalCache and persistentMultipleTabManager are preserved. offline.spec reload without network serves the cached shell and keeps logging sets."},
+    {"probe_id": "L5-01", "status": "pass", "notes": "healthz p50 52.4 / p95 73.1 / p99 92.1 ms. session p50 54.7 / p95 89.0 / p99 90.1 ms."}
+  ],
+  "issue_reverification": [
+    {"issue": 9, "verdict": "resolved", "notes": "Live 00003-4vq mounts SignIn on all 7 routes with 0 uncaught pageerror. auth.tsx isAuthorizedUid fails closed on empty ALLOWED_UID (unit auth.test.tsx). The 390x844 E2E parity suite exists and passes 34/34 covering 8/8 journeys. Live authenticated journeys still await PO #7, tracked there."},
+    {"issue": 10, "verdict": "partially_resolved", "notes": "Part 1 resolved: firebase.json firestore array with database marombapp, .firebaserc hub alias cabral-scion-hub, DEPLOY.md uses 'firebase deploy --only firestore:marombapp --project cabral-scion-hub'. Part 2 still open: releases cloud.firestore/marombapp is 404, the rulesets list is empty, and composite indexes on marombapp list 0 items. Blocked on PO #7."}
+  ],
+  "findings": [
+    "F1 (L4, REQ-004, ADR-002, #10 Part 2): firestore.rules and the sessions(status ASC, finishedAt DESC) composite index are still not deployed to DB marombapp. Blocked on PO #7.",
+    "F2 (L4, REQ-004, new): Cloud Run now sets FIREBASE_PROJECT_ID=cabral-scion-hub (hub Auth, option A). firestore.rules still hard-codes the vibe-cabral UID iELlq0wRQhR2F5NmrM6pbMSrJuj1. A hub Firebase Auth account gets a different UID, so the rules, BFF ALLOWED_UID and VITE_FIREBASE_ALLOWED_UID must all be aligned with the PO #7 outcome before the rules deploy.",
+    "F3 (L3 caveat): The E2E suite runs against in-browser Firebase fakes. Real Firestore rules and composite index behaviour (for example the Analytics/history sessions query) are not exercised until live sign-in works after PO #7.",
+    "F4 (minor, L1): GET /favicon.ico returns 404, which logs one console error on load."
+  ],
+  "requirements": [
+    {"id": "REQ-001", "status": "pass", "notes": "npm test = vitest (9 files, 63 tests) + playwright (34 tests at 390x844), all passing, against e2e-only fakes and never vibe-cabral data. All 8 journeys covered."},
+    {"id": "REQ-002", "status": "partial", "notes": "No AI UI. Offline cache and reload are verified in offline.spec. The live app no longer white-screens and shows SignIn. Live as-is parity past sign-in still awaits PO #7."},
+    {"id": "REQ-003", "status": "pass", "notes": "healthz is strict JSON with 200. SPA fallback works and /api/* returns 404/405 JSON. SA marombapp-run@, port 8080, 100% traffic on 00003-4vq."},
+    {"id": "REQ-004", "status": "partial", "notes": "BFF 401/403 is correct. Client gate fails closed on empty ALLOWED_UID. firebase.json targets marombapp. FIREBASE_PROJECT_ID is set. Rules and index are NOT deployed to marombapp. The rules UID is vibe-cabral while Auth points at the hub."},
+    {"id": "REQ-005", "status": "pass", "notes": "Lazy Vertex adapter and dormant /api/ai behind auth. Zero credentials or SDK strings in live or dist bundles. No e2e fakes in the production dist."},
+    {"id": "REQ-006", "status": "pass", "notes": "Entrypoints <=200, modules <=300 (max 290), 0 import cycles, all files have docblocks. check:arch passes on 72 files."}
+  ],
+  "commands": {
+    "npm_ci": "exit 0",
+    "npm_run_lint": "exit 0 (check-arch passed, 72 files)",
+    "npm_run_test_unit": "exit 0 (9 files, 63 tests)",
+    "npx_playwright_test": "exit 0 (34 passed, 2.5m)",
+    "npm_run_build": "exit 0 (13 precache entries; no e2e fakes in dist)"
+  },
+  "report_path": "eval_runs/eval-report-00003-4vq.md"
+}
