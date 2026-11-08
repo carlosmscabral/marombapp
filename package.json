@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit",
+    "check:arch": "node scripts/check-arch.mjs",
+    "lint": "tsc --noEmit && npm run check:arch",
     "test": "vitest run",
     "test:unit": "vitest run"
   },

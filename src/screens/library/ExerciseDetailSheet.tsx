@@ -1,5 +1,6 @@
 /**
  * Detail bottom sheet for inspecting, editing, or deleting an exercise in `/library`.
+ * Separates read-only inspection and two-step delete confirmation from the exercise form.
  */
 
 import { type ReactNode, useState } from 'react';

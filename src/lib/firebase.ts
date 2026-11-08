@@ -14,6 +14,18 @@ import {
 
 export const ALLOWED_UID = (import.meta.env.VITE_FIREBASE_ALLOWED_UID as string) ?? '';
 
+/**
+ * Resolves the target Firestore database identifier, defaulting to `(default)` when unset or blank.
+ */
+export function resolveFirestoreDatabaseId(
+  rawDatabaseId: string | undefined = import.meta.env.VITE_FIRESTORE_DATABASE_ID as string | undefined,
+): string {
+  const trimmed = rawDatabaseId?.trim();
+  return trimmed ? trimmed : '(default)';
+}
+
+export const FIRESTORE_DATABASE_ID = resolveFirestoreDatabaseId();
+
 let appInstance: FirebaseApp | null = null;
 let authInstance: Auth | null = null;
 let dbInstance: Firestore | null = null;
@@ -45,15 +57,19 @@ export function getFirebaseAuth(): Auth {
 
 /**
  * Returns the shared Firestore client configured with multi-tab IndexedDB persistence.
- * Multi-tab persistence queues offline writes locally during spotty gym connectivity.
+ * Targets `FIRESTORE_DATABASE_ID` (`(default)` or named database) and queues offline writes locally.
  */
 export function getFirestoreDb(): Firestore {
   if (!dbInstance) {
-    dbInstance = initializeFirestore(getFirebaseApp(), {
-      localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager(),
-      }),
-    });
+    dbInstance = initializeFirestore(
+      getFirebaseApp(),
+      {
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager(),
+        }),
+      },
+      FIRESTORE_DATABASE_ID,
+    );
   }
   return dbInstance;
 }

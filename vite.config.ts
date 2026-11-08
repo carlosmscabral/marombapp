@@ -45,7 +45,7 @@ export default defineConfig(() => {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
           navigateFallback: '/index.html',
           // Do NOT cache Firestore. Its own IndexedDB cache handles offline reads and writes.
-          navigateFallbackDenylist: [/^\/__/, /^\/firestore/],
+          navigateFallbackDenylist: [/^\/__/, /^\/firestore/, /^\/api/],
         },
       }),
     ],
