@@ -9,6 +9,7 @@ Covers packaging, deploying, verifying, and rolling back `marombapp-serving` on 
 - **Runtime Service Account:** `marombapp-run@cabral-scion-hub.iam.gserviceaccount.com`
 - **Cloud Build Service Account:** `projects/cabral-scion-hub/serviceAccounts/cabral-builder@cabral-scion-hub.iam.gserviceaccount.com`
 - **Deployer Identity:** `cabral-agent@cabral-scion-hub.iam.gserviceaccount.com` (holds `roles/run.admin` on `marombapp-serving` and `roles/iam.serviceAccountUser` on both `marombapp-run@` and `cabral-builder@`)
+- **Public Invoker Policy:** `allUsers` already holds `roles/run.invoker` on `marombapp-serving` (verified via `gcloud run services get-iam-policy marombapp-serving`), so `--allow-unauthenticated` is omitted from `gcloud run deploy` to avoid any IAM mutation call.
 - **Firestore Database:** Named Native database `marombapp` (`projects/cabral-scion-hub/databases/marombapp`)
 
 ## Build Arguments vs. Runtime Environment
@@ -24,15 +25,22 @@ Covers packaging, deploying, verifying, and rolling back `marombapp-serving` on 
   - `FIRESTORE_DATABASE_ID=marombapp`
   - `GOOGLE_CLOUD_PROJECT=cabral-scion-hub`
   - `GOOGLE_CLOUD_LOCATION=global`
-  - `FIREBASE_PROJECT_ID=<firebase-auth-project-id>` (when distinct from `GOOGLE_CLOUD_PROJECT`)
+  - `FIREBASE_PROJECT_ID=<per PO #7>` (must equal the Firebase Auth project that issues ID tokens so `firebase-admin` verifies the expected audience, taking precedence over `GOOGLE_CLOUD_PROJECT`)
   - `ALLOWED_UID=iELlq0wRQhR2F5NmrM6pbMSrJuj1`
+
+## Open Item (F1 — Pending PO Decision `#7`)
+
+- **Propagating `VITE_FIREBASE_*` build arguments under `gcloud run deploy --source`:**
+  - `gcloud run deploy --source` invokes Cloud Build (`gcr.io/cloud-builders/docker build`), and `--set-build-env-vars` is documented for Google Cloud Buildpacks rather than `Dockerfile` `ARG` values (unproven for `Dockerfile` builds).
+  - For the interim Release 1 deploy (PO `#7` Option C), the `Dockerfile` default `ARG` values (`VITE_FIRESTORE_DATABASE_ID="marombapp"` and empty `VITE_FIREBASE_*`) are intentional for L1/L2 verification.
+  - Once PO decision `#7` resolves the Firebase web app configuration, verify and standardize the build-arg delivery path before the full end-to-end release (either `gcloud builds submit --config=cloudbuild.yaml` passing `--build-arg VITE_FIREBASE_*=...` followed by `gcloud run deploy --image=...`, or staging a public web-config file in the clean archive directory `$d`) and confirm post-deploy by grepping the served JS bundle for the expected `VITE_FIREBASE_PROJECT_ID`.
 
 ## Step 1: Clean Archive Packaging
 
-Never run `gcloud run deploy --source=/workspace` directly on a workspace checkout. Export the verified `factory/main` commit via `git archive` to a clean temporary directory:
+Never run `gcloud run deploy --source=/workspace` directly on a workspace checkout, and never archive `HEAD` of a feature branch. Fetch `origin` and export the verified `origin/factory/main` commit via `git archive` to a clean temporary directory:
 
 ```bash
-sha=$(git -C /workspace rev-parse HEAD)
+git -C /workspace fetch origin && sha=$(git -C /workspace rev-parse origin/factory/main)
 d=/tmp/deploy-$sha
 rm -rf "$d" && mkdir -p "$d"
 git -C /workspace archive "$sha" | tar -x -C "$d"
@@ -40,7 +48,7 @@ git -C /workspace archive "$sha" | tar -x -C "$d"
 
 ## Step 2: Deploy to Cloud Run (`--to-latest`)
 
-Deploy from the clean archive directory with `--build-service-account`, `--service-account`, and `--to-latest`:
+Deploy from the clean archive directory with `--build-service-account`, `--service-account`, and `--to-latest` (`FIREBASE_PROJECT_ID` must equal the Firebase Auth project per PO `#7`, defaulting to `cabral-scion-hub` during the interim Option C deploy):
 
 ```bash
 gcloud run deploy marombapp-serving \
@@ -49,9 +57,8 @@ gcloud run deploy marombapp-serving \
   --region=us-central1 \
   --service-account=marombapp-run@cabral-scion-hub.iam.gserviceaccount.com \
   --build-service-account=projects/cabral-scion-hub/serviceAccounts/cabral-builder@cabral-scion-hub.iam.gserviceaccount.com \
-  --set-env-vars="FIRESTORE_DATABASE_ID=marombapp,GOOGLE_CLOUD_PROJECT=cabral-scion-hub,GOOGLE_CLOUD_LOCATION=global,ALLOWED_UID=iELlq0wRQhR2F5NmrM6pbMSrJuj1" \
+  --set-env-vars="FIRESTORE_DATABASE_ID=marombapp,GOOGLE_CLOUD_PROJECT=cabral-scion-hub,GOOGLE_CLOUD_LOCATION=global,FIREBASE_PROJECT_ID=<per PO #7>,ALLOWED_UID=iELlq0wRQhR2F5NmrM6pbMSrJuj1" \
   --to-latest \
-  --allow-unauthenticated \
   --quiet
 ```
 
