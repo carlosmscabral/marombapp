@@ -1,12 +1,13 @@
-# OpenAPI 3.1 contract for MarombApp Cloud Run BFF (REQ-003, REQ-004, REQ-005, ADR-001).
+# OpenAPI 3.1 contract for MarombApp Cloud Run BFF (REQ-003, REQ-004, REQ-005, ADR-001, ADR-002).
 openapi: 3.1.0
 info:
   title: MarombApp Cloud Run BFF API
   version: 1.0.0
   description: >
     Thin Node/TypeScript Cloud Run BFF serving compiled PWA static assets with SPA route fallback,
-    public health readiness checks, single-UID Firebase ID token authentication, and dormant Vertex AI
-    router boundary (REQ-003, REQ-004, REQ-005, ADR-001).
+    public health readiness checks, single-UID Firebase ID token authentication (FIREBASE_PROJECT_ID
+    taking precedence over GOOGLE_CLOUD_PROJECT for token audience verification per ADR-002), and
+    dormant Vertex AI router boundary (REQ-003, REQ-004, REQ-005, ADR-001, ADR-002).
 paths:
   /api/healthz:
     get:
@@ -41,6 +42,12 @@ paths:
                 $ref: "#/components/schemas/ApiErrorResponse"
         "403":
           description: Valid Firebase ID token for a non-ALLOWED_UID caller or unset ALLOWED_UID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+        "405":
+          description: Non-GET method on /api/auth/session
           content:
             application/json:
               schema:
@@ -82,7 +89,10 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: Firebase Auth ID token verified via firebase-admin and checked against ALLOWED_UID
+      description: >
+        Firebase Auth ID token verified via firebase-admin (audience resolved from
+        FIREBASE_PROJECT_ID -> GOOGLE_CLOUD_PROJECT -> VITE_FIREBASE_PROJECT_ID) and
+        checked against ALLOWED_UID.
   schemas:
     HealthzResponse:
       type: object

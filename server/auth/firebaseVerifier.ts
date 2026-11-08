@@ -4,7 +4,7 @@
  * so startup stays fast and unit tests can mock verification at the module boundary.
  */
 
-import { getServerConfig } from '../config.js';
+import { resolveFirebaseAdminProjectId } from '../config.js';
 
 export interface VerifiedFirebaseToken {
   uid: string;
@@ -13,6 +13,7 @@ export interface VerifiedFirebaseToken {
 
 /**
  * Lazily loads firebase-admin and initializes the default Firebase Admin Auth instance.
+ * Uses FIREBASE_PROJECT_ID before GOOGLE_CLOUD_PROJECT so cross-project token audiences verify cleanly.
  */
 async function getFirebaseAdminAuth() {
   const [{ getApp, getApps, initializeApp }, { getAuth }] = await Promise.all([
@@ -22,9 +23,7 @@ async function getFirebaseAdminAuth() {
   if (getApps().length > 0) {
     return getAuth(getApp());
   }
-  const config = getServerConfig();
-  const projectId =
-    config.googleCloudProject || (process.env.VITE_FIREBASE_PROJECT_ID ?? '').trim() || undefined;
+  const projectId = resolveFirebaseAdminProjectId();
   const app = projectId ? initializeApp({ projectId }) : initializeApp();
   return getAuth(app);
 }

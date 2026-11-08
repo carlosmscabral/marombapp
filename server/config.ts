@@ -9,9 +9,30 @@ export interface BffRuntimeConfig {
   revision: string;
   firestoreDatabase: string;
   allowedUid: string;
+  firebaseProjectId: string;
   googleCloudProject: string;
   googleCloudLocation: string;
   vertexGeminiModel: string;
+}
+
+/**
+ * Resolves the Firebase Auth project ID used for ID token audience verification.
+ * Gives FIREBASE_PROJECT_ID precedence over GOOGLE_CLOUD_PROJECT so Firebase Auth
+ * can remain in vibe-cabral while Cloud Run and Vertex AI run in cabral-scion-hub.
+ */
+export function resolveFirebaseAdminProjectId(
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  const explicitFirebaseProject = (env.FIREBASE_PROJECT_ID ?? '').trim();
+  if (explicitFirebaseProject) {
+    return explicitFirebaseProject;
+  }
+  const googleCloudProject = (env.GOOGLE_CLOUD_PROJECT ?? '').trim();
+  if (googleCloudProject) {
+    return googleCloudProject;
+  }
+  const viteFirebaseProject = (env.VITE_FIREBASE_PROJECT_ID ?? '').trim();
+  return viteFirebaseProject || undefined;
 }
 
 /**
@@ -25,6 +46,7 @@ export function getServerConfig(env: NodeJS.ProcessEnv = process.env): BffRuntim
   const revision = (env.K_REVISION ?? '').trim() || 'local';
   const firestoreDatabase = (env.FIRESTORE_DATABASE_ID ?? '').trim() || '(default)';
   const allowedUid = (env.ALLOWED_UID ?? '').trim();
+  const firebaseProjectId = resolveFirebaseAdminProjectId(env) ?? '';
   const googleCloudProject = (env.GOOGLE_CLOUD_PROJECT ?? '').trim();
   const googleCloudLocation = (env.GOOGLE_CLOUD_LOCATION ?? 'global').trim();
   const vertexGeminiModel = (env.VERTEX_GEMINI_MODEL ?? 'gemini-3.8-flash').trim();
@@ -34,6 +56,7 @@ export function getServerConfig(env: NodeJS.ProcessEnv = process.env): BffRuntim
     revision,
     firestoreDatabase,
     allowedUid,
+    firebaseProjectId,
     googleCloudProject,
     googleCloudLocation,
     vertexGeminiModel,

@@ -1,7 +1,8 @@
 /**
  * Unit and contract test suite for the MarombApp Cloud Run BFF server.
  * Verifies L1 healthz shape, L2 SPA fallback, API 404 JSON isolation,
- * Firebase ID token ALLOWED_UID enforcement, and dormant Vertex AI laziness.
+ * Firebase ID token ALLOWED_UID enforcement, FIREBASE_PROJECT_ID precedence,
+ * and dormant Vertex AI laziness.
  */
 
 import fs from 'node:fs/promises';
@@ -12,8 +13,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vertexAdapter from '../../server/ai/vertex.js';
 import { createBffServer } from '../../server/app.js';
 import * as firebaseVerifier from '../../server/auth/firebaseVerifier.js';
+import { getServerConfig, resolveFirebaseAdminProjectId } from '../../server/config.js';
 
-describe('MarombApp Cloud Run BFF (REQ-003, REQ-004, REQ-005, ADR-001)', () => {
+describe('MarombApp Cloud Run BFF (REQ-003, REQ-004, REQ-005, ADR-001, ADR-002)', () => {
   let tempDistDir = '';
   let baseUrl = '';
   let closeServer: (() => Promise<void>) | null = null;
@@ -23,8 +25,10 @@ describe('MarombApp Cloud Run BFF (REQ-003, REQ-004, REQ-005, ADR-001)', () => {
     process.env = { ...originalEnv };
     delete process.env.K_REVISION;
     delete process.env.FIRESTORE_DATABASE_ID;
+    delete process.env.FIREBASE_PROJECT_ID;
     delete process.env.GOOGLE_CLOUD_PROJECT;
     delete process.env.GOOGLE_CLOUD_LOCATION;
+    delete process.env.VITE_FIREBASE_PROJECT_ID;
     process.env.ALLOWED_UID = 'allowed-owner-uid';
 
     tempDistDir = await fs.mkdtemp(path.join(os.tmpdir(), 'marombapp-bff-dist-'));
@@ -157,7 +161,7 @@ describe('MarombApp Cloud Run BFF (REQ-003, REQ-004, REQ-005, ADR-001)', () => {
     expect(await badTokenRes.json()).toMatchObject({ error: 'unauthenticated' });
   });
 
-  it('rejects non-ALLOWED_UID callers with HTTP 403 JSON and zero Vertex AI calls', async () => {
+  it('rejects non-ALLOWED_UID callers and unset ALLOWED_UID with HTTP 403 JSON and zero Vertex AI calls', async () => {
     const vertexSpy = vi.spyOn(vertexAdapter, 'getVertexClient');
     const verifySpy = vi.spyOn(firebaseVerifier, 'verifyFirebaseIdToken').mockResolvedValue({
       uid: 'intruder-uid-999',
@@ -176,18 +180,21 @@ describe('MarombApp Cloud Run BFF (REQ-003, REQ-004, REQ-005, ADR-001)', () => {
     expect(aiRes.status).toBe(403);
     expect(aiRes.headers.get('content-type')).toContain('application/json');
     expect(await aiRes.json()).toMatchObject({ error: 'forbidden' });
+    expect(verifySpy).toHaveBeenCalledTimes(1);
     expect(verifySpy).toHaveBeenCalledWith('valid-token-wrong-uid');
     expect(vertexSpy).not.toHaveBeenCalled();
 
+    verifySpy.mockClear();
     delete process.env.ALLOWED_UID;
     const unsetUidRes = await fetch(`${baseUrl}/api/auth/session`, {
       headers: { Authorization: 'Bearer valid-token-wrong-uid' },
     });
     expect(unsetUidRes.status).toBe(403);
+    expect(verifySpy).not.toHaveBeenCalled();
     expect(vertexSpy).not.toHaveBeenCalled();
   });
 
-  it('returns HTTP 200 session for ALLOWED_UID and mounts dormant /api/ai boundary after auth', async () => {
+  it('returns HTTP 200 session for ALLOWED_UID, 405 for non-GET session, and mounts dormant /api/ai boundary after auth', async () => {
     const verifySpy = vi.spyOn(firebaseVerifier, 'verifyFirebaseIdToken').mockResolvedValue({
       uid: 'allowed-owner-uid',
       email: 'carlos@example.com',
@@ -203,12 +210,52 @@ describe('MarombApp Cloud Run BFF (REQ-003, REQ-004, REQ-005, ADR-001)', () => {
       email: 'carlos@example.com',
     });
 
+    const postSessionRes = await fetch(`${baseUrl}/api/auth/session`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer valid-owner-token' },
+    });
+    expect(postSessionRes.status).toBe(405);
+    expect(await postSessionRes.json()).toMatchObject({ error: 'method_not_allowed' });
+
     const aiBoundaryRes = await fetch(`${baseUrl}/api/ai/generate`, {
       method: 'POST',
       headers: { Authorization: 'Bearer valid-owner-token' },
     });
     expect(aiBoundaryRes.status).toBe(501);
     expect(await aiBoundaryRes.json()).toMatchObject({ error: 'not_implemented' });
+  });
+
+  it('gives FIREBASE_PROJECT_ID precedence over GOOGLE_CLOUD_PROJECT for Firebase Admin audience verification', () => {
+    expect(
+      resolveFirebaseAdminProjectId({
+        FIREBASE_PROJECT_ID: '  vibe-cabral  ',
+        GOOGLE_CLOUD_PROJECT: 'cabral-scion-hub',
+        VITE_FIREBASE_PROJECT_ID: 'vite-fallback',
+      }),
+    ).toBe('vibe-cabral');
+
+    expect(
+      resolveFirebaseAdminProjectId({
+        FIREBASE_PROJECT_ID: '   ',
+        GOOGLE_CLOUD_PROJECT: 'cabral-scion-hub',
+        VITE_FIREBASE_PROJECT_ID: 'vite-fallback',
+      }),
+    ).toBe('cabral-scion-hub');
+
+    expect(
+      resolveFirebaseAdminProjectId({
+        VITE_FIREBASE_PROJECT_ID: 'vibe-cabral',
+      }),
+    ).toBe('vibe-cabral');
+
+    expect(resolveFirebaseAdminProjectId({})).toBeUndefined();
+
+    const cfg = getServerConfig({
+      FIREBASE_PROJECT_ID: 'vibe-cabral',
+      GOOGLE_CLOUD_PROJECT: 'cabral-scion-hub',
+    });
+    expect(cfg.firebaseProjectId).toBe('vibe-cabral');
+    expect(cfg.googleCloudProject).toBe('cabral-scion-hub');
   });
 
   it('lazily constructs the Vertex AI client only when getVertexClient is called', () => {

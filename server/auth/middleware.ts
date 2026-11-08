@@ -42,8 +42,8 @@ function extractBearerToken(authorizationHeader: string | undefined): string | n
 
 /**
  * Authenticates an incoming HTTP request against Firebase Auth and ALLOWED_UID.
- * Missing or invalid tokens return 401. Non-matching UIDs or unset ALLOWED_UID
- * fail closed with 403 before any downstream I/O.
+ * Missing or invalid tokens return 401. Unset ALLOWED_UID fails closed with 403
+ * before token verification. Non-matching UIDs fail closed with 403 before downstream I/O.
  */
 export async function authenticateRequest(req: IncomingMessage): Promise<AuthMiddlewareResult> {
   const rawAuthHeader = req.headers.authorization;
@@ -57,6 +57,18 @@ export async function authenticateRequest(req: IncomingMessage): Promise<AuthMid
       body: {
         error: 'unauthenticated',
         message: 'Missing or malformed Authorization Bearer token',
+      },
+    };
+  }
+
+  const { allowedUid } = getServerConfig();
+  if (!allowedUid) {
+    return {
+      ok: false,
+      status: 403,
+      body: {
+        error: 'forbidden',
+        message: 'ALLOWED_UID is not configured on this server',
       },
     };
   }
@@ -75,8 +87,7 @@ export async function authenticateRequest(req: IncomingMessage): Promise<AuthMid
     };
   }
 
-  const { allowedUid } = getServerConfig();
-  if (!allowedUid || verified.uid !== allowedUid) {
+  if (verified.uid !== allowedUid) {
     return {
       ok: false,
       status: 403,

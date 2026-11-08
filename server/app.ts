@@ -75,7 +75,11 @@ async function handleRequest(
       return;
     }
 
-    if (pathname === '/api/auth/session' && method === 'GET') {
+    if (pathname === '/api/auth/session') {
+      if (method !== 'GET') {
+        sendJson(res, 405, { error: 'method_not_allowed', message: 'Method not allowed' });
+        return;
+      }
       sendJson(res, 200, {
         uid: authResult.user.uid,
         ...(authResult.user.email ? { email: authResult.user.email } : {}),
