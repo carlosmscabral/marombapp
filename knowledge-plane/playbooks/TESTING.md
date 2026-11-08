@@ -30,8 +30,10 @@ in-browser fakes. The `lead` approved this choice on issue #2.
 
 - **Auth** (`fakes/firebase-auth.ts`): the signed-in user lives in `localStorage` (`fake-auth:user`), so the
   session survives a reload. The "Google popup" returns the uid in `fake-auth:popup-uid` (default
-  `e2e-allowed-uid`). If `fake-auth:popup-error` holds a code, the popup rejects with it. Specs cover the
-  signed-out, wrong-UID, and allowed-UID gate states.
+  `e2e-allowed-uid`). If `fake-auth:popup-error` holds a code, the popup rejects with it. If
+  `fake-auth:init-error` holds a code (for example `auth/invalid-api-key`), `getAuth()` throws it to simulate
+  missing or invalid Firebase configuration. Specs cover the signed-out, wrong-UID, missing-config, and
+  allowed-UID gate states.
 - **Firestore** (`fakes/fake-store.ts`, `fakes/firebase-firestore.ts`): every document lives in
   `localStorage` (`fake-fs:docs`), keyed by path such as `plans/p1/days/d1`. Data survives a reload, so the
   rest-timer and active-session reload specs are real. Listeners fire after every write and on `storage`
@@ -74,6 +76,7 @@ in-browser fakes. The `lead` approved this choice on issue #2.
 | Auth gate: wrong UID rejected | `tests/e2e/auth.spec.ts` | a non-allowlisted account is signed out… |
 | Auth gate: allowed UID, reload, sign-out | `tests/e2e/auth.spec.ts` | the allowlisted account enters…, sign-out from the account menu… |
 | Auth errors and redirect fallback | `tests/e2e/auth.spec.ts` | closing the popup…, a blocked popup falls back… |
+| Auth gate: missing Firebase config guard | `tests/unit/auth.test.tsx`, `tests/e2e/auth.spec.ts` | missing or invalid Firebase config mounts SignIn at 390x844 with zero uncaught page errors |
 | SPA fallback for unknown client routes | `tests/e2e/auth.spec.ts` | unknown client routes redirect to analytics… |
 | 66-exercise seed, once only | `tests/unit/seed.test.ts`, `tests/e2e/library.spec.ts` | seeds exactly 66… |
 | Library browse, chips, search | `tests/e2e/library.spec.ts` | lists exercises alphabetically and filters… |

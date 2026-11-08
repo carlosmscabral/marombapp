@@ -77,3 +77,19 @@ test('unknown client routes redirect to analytics once signed in', async ({ page
   await expect(page).toHaveURL(/\/analytics$/);
   await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible();
 });
+
+test('missing or invalid Firebase config mounts SignIn at 390x844 with zero uncaught page errors', async ({ page }) => {
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (err) => pageErrors.push(err));
+
+  await boot(page, { initError: 'auth/invalid-api-key', path: '/library' });
+  expect(page.viewportSize()).toEqual({ width: 390, height: 844 });
+  await expect(page.getByRole('heading', { name: 'MarombApp' })).toBeVisible();
+  await expect(signInButton(page)).toBeVisible();
+  await expect(page.getByText('Firebase: Error (auth/invalid-api-key).')).toBeVisible();
+  await expect(page.getByRole('navigation')).toHaveCount(0);
+
+  await signInButton(page).click();
+  await expect(page.getByText('Firebase: Error (auth/invalid-api-key).')).toBeVisible();
+  expect(pageErrors).toEqual([]);
+});

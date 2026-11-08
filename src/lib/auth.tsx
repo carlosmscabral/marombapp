@@ -17,9 +17,10 @@ import {
   signInWithPopup,
   signInWithRedirect,
   signOut as fbSignOut,
+  type Auth,
   type User,
 } from 'firebase/auth';
-import { ALLOWED_UID, getFirebaseAuth } from './firebase';
+import { getFirebaseAuth, resolveAllowedUid } from './firebase';
 
 interface AuthContextValue {
   user: User | null;
@@ -32,7 +33,23 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 /**
- * Provides Firebase authentication state and immediately signs out non-allowlisted accounts.
+ * Checks whether `uid` matches the configured single-user `ALLOWED_UID`.
+ * If `ALLOWED_UID` is empty or unset, the check fails closed and rejects every account.
+ */
+export function isAuthorizedUid(
+  uid: string | undefined | null,
+  allowedUid: string = resolveAllowedUid(),
+): boolean {
+  const normalizedAllowed = allowedUid.trim();
+  if (!normalizedAllowed || !uid) {
+    return false;
+  }
+  return uid === normalizedAllowed;
+}
+
+/**
+ * Provides Firebase authentication state, fails closed when `ALLOWED_UID` is unset,
+ * and surfaces initialization or sign-in errors without unmounting the SignIn screen.
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -40,23 +57,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState(null as string | null);
 
   useEffect(() => {
-    const auth = getFirebaseAuth();
-    const unsub = onAuthStateChanged(auth, async (next) => {
-      if (next && ALLOWED_UID && next.uid !== ALLOWED_UID) {
-        try {
-          await fbSignOut(auth);
-        } catch {
-          /* Ignore sign-out errors during unauthorized cleanup. */
-        }
-        setUser(null);
-        setError('unauthorized');
-      } else {
-        setUser(next);
-        if (next) setError(null);
-      }
+    let auth: Auth;
+    try {
+      auth = getFirebaseAuth();
+    } catch (err) {
+      setUser(null);
+      setError((err as Error)?.message || 'config');
       setLoading(false);
-    });
-    return unsub;
+      return undefined;
+    }
+
+    try {
+      const unsub = onAuthStateChanged(auth, async (next) => {
+        if (next && !isAuthorizedUid(next.uid)) {
+          try {
+            await fbSignOut(auth);
+          } catch {
+            /* Ignore sign-out errors during unauthorized cleanup. */
+          }
+          setUser(null);
+          setError('unauthorized');
+        } else {
+          setUser(next);
+          if (next) setError(null);
+        }
+        setLoading(false);
+      });
+      return unsub;
+    } catch (err) {
+      setUser(null);
+      setError((err as Error)?.message || 'config');
+      setLoading(false);
+      return undefined;
+    }
   }, []);
 
   const value = useMemo<AuthContextValue>(
@@ -65,12 +98,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       error,
       signIn: async () => {
-        const auth = getFirebaseAuth();
         setError(null);
+        let auth: Auth;
+        try {
+          auth = getFirebaseAuth();
+        } catch (err) {
+          setError((err as Error)?.message || 'config');
+          return;
+        }
         const provider = new GoogleAuthProvider();
         try {
           const result = await signInWithPopup(auth, provider);
-          if (ALLOWED_UID && result.user.uid !== ALLOWED_UID) {
+          if (!isAuthorizedUid(result.user.uid)) {
             await fbSignOut(auth);
             setUser(null);
             setError('unauthorized');
@@ -78,19 +117,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (err) {
           const code = (err as { code?: string })?.code;
           if (code === 'auth/popup-blocked') {
-            await signInWithRedirect(auth, provider);
+            try {
+              await signInWithRedirect(auth, provider);
+            } catch (redirectErr) {
+              setError((redirectErr as Error)?.message || 'sign-in failed');
+            }
             return;
           }
           if (
             code !== 'auth/popup-closed-by-user' &&
             code !== 'auth/cancelled-popup-request'
           ) {
-            setError((err as Error).message || 'sign-in failed');
+            setError((err as Error)?.message || 'sign-in failed');
           }
         }
       },
       signOut: async () => {
-        await fbSignOut(getFirebaseAuth());
+        try {
+          await fbSignOut(getFirebaseAuth());
+        } catch {
+          /* Ignore sign-out errors when Auth failed to initialize. */
+        }
         setUser(null);
       },
     }),

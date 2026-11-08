@@ -8,6 +8,7 @@
 export const USER_KEY = 'fake-auth:user';
 export const POPUP_UID_KEY = 'fake-auth:popup-uid';
 export const POPUP_ERROR_KEY = 'fake-auth:popup-error';
+export const INIT_ERROR_KEY = 'fake-auth:init-error';
 
 export interface User {
   uid: string;
@@ -40,8 +41,14 @@ function writeUser(user: User | null): void {
   for (const l of [...listeners]) l(user);
 }
 
-/** Returns the shared fake Auth handle. */
+/**
+ * Returns the shared fake Auth handle, or throws when `fake-auth:init-error` simulates missing config.
+ */
 export function getAuth(): Auth {
+  const initCode = localStorage.getItem(INIT_ERROR_KEY);
+  if (initCode) {
+    throw Object.assign(new Error(`Firebase: Error (${initCode}).`), { code: initCode });
+  }
   return auth;
 }
 

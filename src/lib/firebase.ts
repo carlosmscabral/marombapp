@@ -15,6 +15,15 @@ import {
 export const ALLOWED_UID = (import.meta.env.VITE_FIREBASE_ALLOWED_UID as string) ?? '';
 
 /**
+ * Resolves the allowlisted single-user Firebase UID, returning an empty string when unset or blank.
+ */
+export function resolveAllowedUid(
+  rawAllowedUid: string | undefined = import.meta.env.VITE_FIREBASE_ALLOWED_UID as string | undefined,
+): string {
+  return rawAllowedUid?.trim() ?? '';
+}
+
+/**
  * Resolves the target Firestore database identifier, defaulting to `(default)` when unset or blank.
  */
 export function resolveFirestoreDatabaseId(

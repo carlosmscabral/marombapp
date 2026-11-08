@@ -16,6 +16,7 @@ interface BootOptions {
   signedIn?: boolean;
   popupUid?: string;
   popupError?: string;
+  initError?: string;
   path?: string;
   /** If false, the spec handles `confirm()` dialogs itself. */
   acceptDialogs?: boolean;
@@ -30,15 +31,23 @@ export async function boot(page: Page, opts: BootOptions = {}): Promise<void> {
     ? { uid: ALLOWED_UID, email: `${ALLOWED_UID}@example.test`, displayName: 'Test Lifter' }
     : null;
   await page.addInitScript(
-    ({ docs, user, popupUid, popupError, keys }) => {
+    ({ docs, user, popupUid, popupError, initError, keys }) => {
       if (sessionStorage.getItem('e2e:seeded')) return;
       sessionStorage.setItem('e2e:seeded', '1');
       if (docs) localStorage.setItem(keys.docs, JSON.stringify(docs));
       if (user) localStorage.setItem(keys.user, JSON.stringify(user));
       if (popupUid) localStorage.setItem('fake-auth:popup-uid', popupUid);
       if (popupError) localStorage.setItem('fake-auth:popup-error', popupError);
+      if (initError) localStorage.setItem('fake-auth:init-error', initError);
     },
-    { docs: opts.docs, user, popupUid: opts.popupUid, popupError: opts.popupError, keys: { docs: DOCS_KEY, user: USER_KEY } },
+    {
+      docs: opts.docs,
+      user,
+      popupUid: opts.popupUid,
+      popupError: opts.popupError,
+      initError: opts.initError,
+      keys: { docs: DOCS_KEY, user: USER_KEY },
+    },
   );
   if (opts.acceptDialogs !== false) page.on('dialog', (d) => void d.accept());
   await page.goto(opts.path ?? '/');
