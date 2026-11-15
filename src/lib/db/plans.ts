@@ -8,13 +8,13 @@ import {
   collection,
   deleteDoc,
   doc,
-  getDocs,
   getDocsFromCache,
   limit,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
   where,
   writeBatch,
@@ -129,22 +129,42 @@ export function createPlan(name: string): Promise<string> {
 
 /**
  * Marks `planId` as active and deactivates all other plans in a single Firestore batch.
+ * Merges caller-subscribed `knownPlans` with cache-only `getDocsFromCache` (never blocking on network `getDocs`)
+ * and starts `batch.commit()` without awaiting server acknowledgment so poor-signal switching never stalls.
  */
-export async function setActivePlan(planId: string): Promise<void> {
+export async function setActivePlan(
+  planId: string,
+  knownPlans: readonly Pick<Plan, 'id' | 'active'>[] = [],
+): Promise<void> {
   const db = getFirestoreDb();
-  const snap = await getDocs(plansCol());
-  const batch = writeBatch(db);
-  snap.forEach((d) => {
-    const isTarget = d.id === planId;
-    const data = d.data() as { active?: boolean };
-    if (Boolean(data.active) !== isTarget) {
-      batch.update(d.ref, { active: isTarget });
+  const otherActiveIds = new Set<string>();
+  for (const p of knownPlans) {
+    if (p.id !== planId && p.active && !pendingDeletedPlans.has(p.id)) {
+      otherActiveIds.add(p.id);
+    }
+  }
+  const cachedSnap = await getDocsFromCache(plansCol()).catch(() => null);
+  let targetActiveInCache = false;
+  cachedSnap?.forEach((d) => {
+    const isActive = Boolean((d.data() as { active?: boolean }).active);
+    if (d.id === planId) {
+      targetActiveInCache = isActive;
+    } else if (isActive && !pendingDeletedPlans.has(d.id)) {
+      otherActiveIds.add(d.id);
     }
   });
-  if (!snap.docs.some((d) => d.id === planId)) {
+  const knownTarget = knownPlans.find((p) => p.id === planId);
+  const targetAlreadyActive =
+    knownTarget !== undefined ? knownTarget.active : targetActiveInCache;
+
+  const batch = writeBatch(db);
+  for (const otherId of otherActiveIds) {
+    batch.update(planDoc(otherId), { active: false });
+  }
+  if (!targetAlreadyActive || !targetActiveInCache) {
     batch.update(planDoc(planId), { active: true });
   }
-  await batch.commit();
+  void batch.commit().catch(() => {});
 }
 
 /**
@@ -196,19 +216,32 @@ export async function deletePlan(
 }
 
 /**
- * Appends a new training day to the end of `planId` and returns its document id.
+ * Appends a new training day to the end of `planId` and returns its client-generated document id immediately.
+ * Computes `order` from caller-subscribed `knownDays` and cache-only `getDocsFromCache` without network reads,
+ * and queues `setDoc` without awaiting server acknowledgment so opening the new day never stalls offline.
  */
-export async function addPlanDay(planId: string, name: string): Promise<string> {
-  const snap = await getDocs(daysCol(planId));
-  const maxOrder = snap.docs.reduce((max, d) => {
+export async function addPlanDay(
+  planId: string,
+  name: string,
+  knownDays: readonly Pick<PlanDay, 'id' | 'order'>[] = [],
+): Promise<string> {
+  let maxOrder = -1;
+  for (const d of knownDays) {
+    if (typeof d.order === 'number' && d.order > maxOrder) {
+      maxOrder = d.order;
+    }
+  }
+  const cachedSnap = await getDocsFromCache(daysCol(planId)).catch(() => null);
+  cachedSnap?.forEach((d) => {
     const ord = (d.data() as { order?: number }).order ?? -1;
-    return ord > max ? ord : max;
-  }, -1);
-  const ref = await addDoc(daysCol(planId), {
+    if (ord > maxOrder) maxOrder = ord;
+  });
+  const ref = doc(daysCol(planId));
+  void setDoc(ref, {
     name,
     order: maxOrder + 1,
     exercises: [],
-  });
+  }).catch(() => {});
   return ref.id;
 }
 

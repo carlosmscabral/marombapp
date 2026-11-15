@@ -49,6 +49,7 @@ export function createTestContainer(): MinimalElement {
       attributes: {},
       addEventListener: noop,
       removeEventListener: noop,
+      focus: noop,
       setAttribute(k: string, v: unknown) {
         (this.attributes as Record<string, string>)[k] = String(v);
       },
@@ -107,12 +108,52 @@ export function findButtons(rootEl: MinimalElement): MinimalElement[] {
 }
 
 /**
+ * Returns every `<input>` descendant under `rootEl` in document order.
+ */
+export function findInputs(rootEl: MinimalElement): MinimalElement[] {
+  const out: MinimalElement[] = [];
+  function walk(node: MinimalElement) {
+    if (node.tagName === 'INPUT') out.push(node);
+    for (const child of node.childNodes) {
+      if (child.nodeType === 1) walk(child as MinimalElement);
+    }
+  }
+  walk(rootEl);
+  return out;
+}
+
+/**
  * Reads React's internal props object attached to a rendered `MinimalElement`.
  */
 export function getReactProps(el: MinimalElement): {
   onClick?: (e: { stopPropagation: () => void }) => void;
+  onChange?: (e: { target: { value: string } }) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
+  placeholder?: string;
+  value?: string;
   'aria-label'?: string;
 } {
   const key = Object.keys(el).find((k) => k.startsWith('__reactProps$'));
   return (key ? (el[key] as ReturnType<typeof getReactProps>) : {}) ?? {};
+}
+
+/**
+ * Builds a minimal Firestore `QuerySnapshot`-like object for component tests.
+ */
+export function makeMockSnapshot<T extends { id: string }>(
+  basePath: string,
+  items: T[],
+  toData: (item: T) => Record<string, unknown>,
+) {
+  const docs = items.map((item) => ({
+    id: item.id,
+    ref: { kind: 'doc' as const, id: item.id, path: `${basePath}/${item.id}` },
+    data: () => toData(item),
+  }));
+  return {
+    docs,
+    empty: docs.length === 0,
+    forEach: (fn: (d: (typeof docs)[number]) => void) => docs.forEach(fn),
+  };
 }

@@ -1,11 +1,11 @@
 /**
  * Plan detail organizer (`PlanDetailView`).
- * Manages plan renaming, active-plan selection, day creation, reordering, and deletion.
+ * Manages plan renaming, optimistic active-plan selection, and immediate day creation, reordering, and deletion.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Circle, Play, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Circle, Play, Trash2 } from 'lucide-react';
 import { cn } from '../../components/Layout';
 import {
   addPlanDay,
@@ -20,13 +20,15 @@ import {
 import { PT_BR } from '../../lib/i18n/pt-BR';
 import type { Exercise, Plan as PlanT, PlanDay as PlanDayT } from '../../types';
 import { PlanDay } from '../PlanDay';
-import { DayRow } from './DayRow';
+import { AddDayRow, DayRow } from './DayRow';
 
 export interface PlanDetailViewProps {
   plan: PlanT;
+  plans?: PlanT[];
   library: Exercise[];
   selectedDayId: string | null;
   onSelectDay: (id: string | null) => void;
+  onActivatePlan?: (id: string) => void;
   onBack: () => void;
 }
 
@@ -35,14 +37,18 @@ export interface PlanDetailViewProps {
  */
 export function PlanDetailView({
   plan,
+  plans,
   library,
   selectedDayId,
   onSelectDay,
+  onActivatePlan,
   onBack,
 }: PlanDetailViewProps) {
   const navigate = useNavigate();
   const [days, setDays] = useState<PlanDayT[]>([]);
+  const [optimisticDays, setOptimisticDays] = useState<PlanDayT[]>([]);
   const [deletedDayIds, setDeletedDayIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [optimisticActive, setOptimisticActive] = useState(false);
   const [name, setName] = useState(plan.name);
   const nameFocusedRef = useRef(false);
   const [addingDay, setAddingDay] = useState(false);
@@ -50,8 +56,17 @@ export function PlanDetailView({
 
   useEffect(() => {
     setDeletedDayIds(new Set());
-    return subscribePlanDays(plan.id, setDays);
+    setOptimisticDays([]);
+    return subscribePlanDays(plan.id, (incoming) => {
+      setDays(incoming);
+      const present = new Set(incoming.map((d) => d.id));
+      setOptimisticDays((prev) => prev.filter((od) => !present.has(od.id)));
+    });
   }, [plan.id]);
+
+  useEffect(() => {
+    setOptimisticActive(false);
+  }, [plan.id, plan.active]);
 
   useEffect(() => {
     if (!nameFocusedRef.current) setName(plan.name);
@@ -68,7 +83,12 @@ export function PlanDetailView({
   );
   useEffect(() => () => debouncedRename.flush(), [debouncedRename]);
 
-  const visibleDays = days.filter((d) => !deletedDayIds.has(d.id));
+  const allDays = useMemo(() => {
+    const present = new Set(days.map((d) => d.id));
+    return [...days, ...optimisticDays.filter((od) => !present.has(od.id))];
+  }, [days, optimisticDays]);
+
+  const visibleDays = allDays.filter((d) => !deletedDayIds.has(d.id));
   const selectedDay = visibleDays.find((d) => d.id === selectedDayId) ?? null;
   if (selectedDay) {
     return (
@@ -77,9 +97,14 @@ export function PlanDetailView({
         day={selectedDay}
         library={library}
         onBack={() => onSelectDay(null)}
+        onDeleted={() =>
+          setDeletedDayIds((prev) => new Set(prev).add(selectedDay.id))
+        }
       />
     );
   }
+
+  const isActive = plan.active || optimisticActive;
 
   const moveDay = async (idx: number, dir: -1 | 1) => {
     const target = idx + dir;
@@ -101,7 +126,7 @@ export function PlanDetailView({
     debouncedRename.cancel();
     void deletePlan(
       plan.id,
-      days.map((d) => d.id),
+      allDays.map((d) => d.id),
     ).catch(() => {});
     onBack();
   };
@@ -117,7 +142,13 @@ export function PlanDetailView({
       cancelAddDay();
       return;
     }
-    const id = await addPlanDay(plan.id, dayName);
+    const nextOrder =
+      allDays.reduce((max, d) => (d.order > max ? d.order : max), -1) + 1;
+    const id = await addPlanDay(plan.id, dayName, allDays);
+    setOptimisticDays((prev) => [
+      ...prev,
+      { id, name: dayName, order: nextOrder, exercises: [] },
+    ]);
     setNewDayName('');
     setAddingDay(false);
     onSelectDay(id);
@@ -160,25 +191,27 @@ export function PlanDetailView({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={async () => {
-            if (plan.active) return;
-            await setActivePlan(plan.id).catch(() => {});
+          onClick={() => {
+            if (isActive) return;
+            setOptimisticActive(true);
+            onActivatePlan?.(plan.id);
+            void setActivePlan(plan.id, plans ?? [plan]).catch(() => {});
           }}
           className={cn(
             'flex-1 min-h-11 flex items-center justify-between gap-3 px-4 py-3 rounded-xl border transition-colors',
-            plan.active
+            isActive
               ? 'bg-primary/10 border-primary/30 text-primary cursor-default'
               : 'bg-surface-container-low border-outline-variant/20 text-on-surface hover:bg-surface-container-high',
           )}
         >
           <span className="flex items-center gap-2">
-            {plan.active ? (
+            {isActive ? (
               <CheckCircle2 className="w-5 h-5" />
             ) : (
               <Circle className="w-5 h-5" />
             )}
             <span className="font-headline text-sm font-medium">
-              {plan.active
+              {isActive
                 ? PT_BR.plan.activePlanBtn
                 : PT_BR.plan.setAsActivePlanBtn}
             </span>
@@ -226,47 +259,17 @@ export function PlanDetailView({
           />
         ))}
 
-        {addingDay ? (
-          <div className="bg-surface-container-low rounded-xl p-3 flex items-center gap-2">
-            <input
-              autoFocus
-              value={newDayName}
-              onChange={(e) => setNewDayName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void submitAddDay();
-                if (e.key === 'Escape') cancelAddDay();
-              }}
-              placeholder={PT_BR.plan.dayNamePlaceholderExample}
-              className="flex-1 min-w-0 bg-surface-container-highest/40 rounded-lg px-3 py-2.5 text-on-surface outline-none focus:ring-1 focus:ring-primary/40"
-            />
-            <button
-              type="button"
-              onClick={cancelAddDay}
-              className="min-h-11 px-3 rounded-lg bg-surface-container-high text-on-surface-variant hover:text-on-surface text-sm font-medium transition-colors"
-            >
-              {PT_BR.common.cancel}
-            </button>
-            <button
-              type="button"
-              onClick={() => void submitAddDay()}
-              className="min-h-11 px-3.5 rounded-lg bg-primary text-on-primary text-sm font-medium"
-            >
-              {PT_BR.common.add}
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setAddingDay(true)}
-            className="w-full flex items-center justify-center gap-2 bg-surface-container-highest text-primary font-headline font-medium px-6 py-3 rounded-xl border border-primary/20 hover:bg-surface-bright transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            {PT_BR.plan.addDayBtn}
-          </button>
-        )}
+        <AddDayRow
+          adding={addingDay}
+          value={newDayName}
+          onStart={() => setAddingDay(true)}
+          onChange={setNewDayName}
+          onSubmit={() => void submitAddDay()}
+          onCancel={cancelAddDay}
+        />
       </section>
 
-      {plan.active && visibleDays.length > 0 && (
+      {isActive && visibleDays.length > 0 && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40">
           <button
             type="button"

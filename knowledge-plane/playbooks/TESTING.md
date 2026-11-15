@@ -103,6 +103,7 @@ in-browser fakes. The `lead` approved this choice on issue #2.
 | SessionDetail | `tests/e2e/analytics.spec.ts` | a recent session opens its detail…, session detail shows incomplete sets… |
 | Deletion & accidental-creation recovery (#13, #14) | `tests/unit/deletion.test.ts`, `tests/unit/planDeletionUi.test.tsx`, `tests/e2e/deletion.spec.ts`, `tests/e2e/deletion-sessions.spec.ts` | inline creation cancel, mistaken-day delete, non-blocking hard plan delete (with child days), finished session delete, dangling plan/day session survival, >=44px touch targets |
 | PT-BR display-layer translation & glossary (#16) | `tests/unit/i18n.test.ts`, `tests/unit/format.test.ts`, `tests/e2e/*.spec.ts` | 66 canonical English seed exercises mapped to unique PT-BR display names without rewriting Firestore docs, custom exercises verbatim, `pt-BR` dates/numbers, `<html lang="pt-BR">` & PWA manifest |
+| Offline-resilient `setActivePlan` & `addPlanDay` (#17) | `tests/unit/planOfflineMutations.test.ts`, `tests/unit/planOfflineUi.test.tsx`, `tests/e2e/plan.spec.ts` | hanging-`getDocs` and unacked-write resilience, client-generated day IDs, cache/subscribed order computation, immediate optimistic PT-BR UI updates |
 | PWA manifest and offline reload | `tests/e2e/offline.spec.ts` | all |
 
 ## Add a spec

@@ -22,12 +22,13 @@ export interface PlanDayProps {
   day: PlanDayT;
   library: Exercise[];
   onBack: () => void;
+  onDeleted?: () => void;
 }
 
 /**
  * Renders the exercise list and target controls for a single training day.
  */
-export function PlanDay({ planId, day, library, onBack }: PlanDayProps) {
+export function PlanDay({ planId, day, library, onBack, onDeleted }: PlanDayProps) {
   const [name, setName] = useState(day.name);
   const nameFocusedRef = useRef(false);
   useEffect(() => {
@@ -74,6 +75,7 @@ export function PlanDay({ planId, day, library, onBack }: PlanDayProps) {
     if (!confirm(PT_BR.plan.confirmDeleteDay(displayName))) return;
     debouncedRename.cancel();
     cancelExercises();
+    onDeleted?.();
     await deletePlanDay(planId, day.id).catch(() => {});
     onBack();
   };
