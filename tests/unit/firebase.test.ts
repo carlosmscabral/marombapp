@@ -1,6 +1,7 @@
 /**
  * Unit tests for Firebase client initialization and multi-database Firestore configuration.
- * Verifies that `VITE_FIRESTORE_DATABASE_ID` defaults to `(default)`, accepts named databases, and preserves multi-tab IndexedDB persistence.
+ * Verifies that `VITE_FIRESTORE_DATABASE_ID` defaults to `marombapp-test`, refuses `(default)`,
+ * accepts named databases (`marombapp`, `marombapp-test`), and preserves IndexedDB persistence.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -38,19 +39,29 @@ describe('resolveFirestoreDatabaseId', () => {
     vi.unstubAllEnvs();
   });
 
-  it('defaults to (default) when env is unset, empty, or whitespace', () => {
+  it('defaults to marombapp-test when env is unset, empty, or whitespace', () => {
     vi.stubEnv('VITE_FIRESTORE_DATABASE_ID', '');
-    expect(resolveFirestoreDatabaseId()).toBe('(default)');
-    expect(resolveFirestoreDatabaseId(undefined)).toBe('(default)');
-    expect(resolveFirestoreDatabaseId('')).toBe('(default)');
-    expect(resolveFirestoreDatabaseId('   ')).toBe('(default)');
+    expect(resolveFirestoreDatabaseId()).toBe('marombapp-test');
+    expect(resolveFirestoreDatabaseId(undefined)).toBe('marombapp-test');
+    expect(resolveFirestoreDatabaseId('')).toBe('marombapp-test');
+    expect(resolveFirestoreDatabaseId('   ')).toBe('marombapp-test');
+  });
+
+  it('refuses (default) and default explicitly regardless of casing or whitespace', () => {
+    vi.stubEnv('VITE_FIRESTORE_DATABASE_ID', '(default)');
+    expect(() => resolveFirestoreDatabaseId()).toThrow(/\(default\)/i);
+    expect(() => resolveFirestoreDatabaseId('(default)')).toThrow(/\(default\)/i);
+    expect(() => resolveFirestoreDatabaseId('  (DEFAULT)  ')).toThrow(/\(default\)/i);
+    expect(() => resolveFirestoreDatabaseId('default')).toThrow(/\(default\)/i);
+    expect(() => resolveFirestoreDatabaseId('  Default  ')).toThrow(/\(default\)/i);
   });
 
   it('returns the trimmed named database identifier from arguments or env', () => {
     vi.stubEnv('VITE_FIRESTORE_DATABASE_ID', '  marombapp  ');
     expect(resolveFirestoreDatabaseId()).toBe('marombapp');
     expect(resolveFirestoreDatabaseId('marombapp')).toBe('marombapp');
-    expect(resolveFirestoreDatabaseId('  marombapp  ')).toBe('marombapp');
+    expect(resolveFirestoreDatabaseId('marombapp-test')).toBe('marombapp-test');
+    expect(resolveFirestoreDatabaseId('  marombapp-test  ')).toBe('marombapp-test');
   });
 });
 
@@ -59,7 +70,18 @@ describe('getFirestoreDb', () => {
     vi.clearAllMocks();
   });
 
-  it('initializes Firestore once with persistentLocalCache, persistentMultipleTabManager, and databaseId', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('refuses to initialize Firestore when VITE_FIRESTORE_DATABASE_ID is set to (default)', () => {
+    vi.stubEnv('VITE_FIRESTORE_DATABASE_ID', '(default)');
+    expect(() => getFirestoreDb()).toThrow(/\(default\)/i);
+    expect(mocks.initializeFirestore).not.toHaveBeenCalled();
+  });
+
+  it('initializes Firestore once with persistentLocalCache, persistentMultipleTabManager, and marombapp-test', () => {
+    expect(FIRESTORE_DATABASE_ID).toBe('marombapp-test');
     const first = getFirestoreDb();
     const second = getFirestoreDb();
 
