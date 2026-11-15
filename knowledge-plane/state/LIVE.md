@@ -5,17 +5,18 @@ Only the deployer writes this file, after every deploy and every rollback. Other
 | Field | Value |
 |---|---|
 | Service | `marombapp-serving` (`https://marombapp-serving-280799742875.us-central1.run.app`) |
-| Live revision | `marombapp-serving-00010-zcx` |
-| Rollback revision | `marombapp-serving-00009-vvr` |
-| Source commit | `8c8981b8092da836b9a6ca0b87e6932a7b7f3d02` (`8c8981b`) |
+| Live revision | `marombapp-serving-00011-tr2` |
+| Rollback revision | `marombapp-serving-00010-zcx` |
+| Source commit | `9a87baaf3ed33e12ff61d556885bc61761a6efdf` (`9a87baa`) |
 | Applied migrations | `firestore:marombapp` (ruleset `88e55196-5b7e-400a-927f-70777c7c9001` + index `CICAgOjXh4EK` `READY`); `firestore:marombapp-test` (ruleset `81832c18-7dee-420c-b68d-33903eb5f578` + index `CICAgOjXh4EK` `READY` per [ADR-005](../adr/ADR-005-marombapp-db-is-production-marombapp-test-for-tests.md)) |
-| Deployed at (UTC) | `2026-11-15T17:58:36Z` |
+| Deployed at (UTC) | `2026-11-15T19:12:47Z` |
 | Deployed by | deployer |
 
 ## History
 
 | Deployed at (UTC) | Revision | Source | Work items |
 |---|---|---|---|
+| `2026-11-15T19:12:47Z` | `marombapp-serving-00011-tr2` (`vibe-cabral`) | `9a87baa` | #22 |
 | `2026-11-15T17:58:36Z` | `marombapp-serving-00010-zcx` (`vibe-cabral`) | `8c8981b` | #20 |
 | `2026-11-15T17:24:33Z` | `marombapp-serving-00009-vvr` (`vibe-cabral`) | `64f7cd6` | #21 |
 | `2026-11-15T16:34:09Z` | `marombapp-serving-00008-m7h` (`vibe-cabral`) | `bfdd480` | #17, #19 |
