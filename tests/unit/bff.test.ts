@@ -13,9 +13,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vertexAdapter from '../../server/ai/vertex.js';
 import { createBffServer } from '../../server/app.js';
 import * as firebaseVerifier from '../../server/auth/firebaseVerifier.js';
-import { getServerConfig, resolveFirebaseAdminProjectId } from '../../server/config.js';
+import {
+  getServerConfig,
+  resolveFirebaseAdminProjectId,
+  resolveFirestoreDatabaseId,
+} from '../../server/config.js';
 
-describe('MarombApp Cloud Run BFF (REQ-003, REQ-004, REQ-005, ADR-001, ADR-002, ADR-004)', () => {
+describe('MarombApp Cloud Run BFF (REQ-003, REQ-004, REQ-005, ADR-001, ADR-004, ADR-005)', () => {
   let tempDistDir = '';
   let baseUrl = '';
   let closeServer: (() => Promise<void>) | null = null;
@@ -92,7 +96,7 @@ describe('MarombApp Cloud Run BFF (REQ-003, REQ-004, REQ-005, ADR-001, ADR-002, 
     expect(defaultBody).toEqual({
       status: 'ok',
       revision: 'local',
-      firestoreDatabase: '(default)',
+      firestoreDatabase: 'marombapp-test',
       aiReady: false,
     });
 
@@ -110,6 +114,11 @@ describe('MarombApp Cloud Run BFF (REQ-003, REQ-004, REQ-005, ADR-001, ADR-002, 
       firestoreDatabase: 'marombapp',
       aiReady: true,
     });
+
+    process.env.FIRESTORE_DATABASE_ID = '(default)';
+    const forbiddenDbRes = await fetch(`${baseUrl}/api/healthz`);
+    expect(forbiddenDbRes.status).toBe(500);
+    expect(await forbiddenDbRes.json()).toMatchObject({ error: 'internal_error' });
     expect(vertexSpy).not.toHaveBeenCalled();
   });
 
@@ -194,7 +203,7 @@ describe('MarombApp Cloud Run BFF (REQ-003, REQ-004, REQ-005, ADR-001, ADR-002, 
     expect(vertexSpy).not.toHaveBeenCalled();
   });
 
-  it('returns HTTP 200 session for ALLOWED_UID, 405 for non-GET session, and mounts dormant /api/ai boundary after auth', async () => {
+  it('returns 200 session for ALLOWED_UID, 405 for non-GET, and mounts dormant /api/ai after auth', async () => {
     const verifySpy = vi.spyOn(firebaseVerifier, 'verifyFirebaseIdToken').mockResolvedValue({
       uid: 'allowed-owner-uid',
       email: 'carlos@example.com',
@@ -256,6 +265,20 @@ describe('MarombApp Cloud Run BFF (REQ-003, REQ-004, REQ-005, ADR-001, ADR-002, 
     });
     expect(cfg.firebaseProjectId).toBe('auth-project');
     expect(cfg.googleCloudProject).toBe('run-project');
+    expect(cfg.firestoreDatabase).toBe('marombapp-test');
+  });
+
+  it('resolves FIRESTORE_DATABASE_ID safely and refuses (default) or default (ADR-004, ADR-005)', () => {
+    expect(resolveFirestoreDatabaseId(undefined)).toBe('marombapp-test');
+    expect(resolveFirestoreDatabaseId('')).toBe('marombapp-test');
+    expect(resolveFirestoreDatabaseId('   ')).toBe('marombapp-test');
+    expect(resolveFirestoreDatabaseId('marombapp')).toBe('marombapp');
+    expect(resolveFirestoreDatabaseId('  marombapp-test  ')).toBe('marombapp-test');
+    expect(() => resolveFirestoreDatabaseId('(default)')).toThrow(/\(default\)/i);
+    expect(() => resolveFirestoreDatabaseId('  (DEFAULT)  ')).toThrow(/\(default\)/i);
+    expect(() => resolveFirestoreDatabaseId('default')).toThrow(/\(default\)/i);
+    expect(() => getServerConfig({ FIRESTORE_DATABASE_ID: '(default)' })).toThrow(/\(default\)/i);
+    expect(() => getServerConfig({ FIRESTORE_DATABASE_ID: ' default ' })).toThrow(/\(default\)/i);
   });
 
   it('lazily constructs the Vertex AI client only when getVertexClient is called', () => {

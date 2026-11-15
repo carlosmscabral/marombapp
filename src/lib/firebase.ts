@@ -23,14 +23,28 @@ export function resolveAllowedUid(
   return rawAllowedUid?.trim() ?? '';
 }
 
+export const DEFAULT_SAFE_FIRESTORE_DATABASE_ID = 'marombapp-test';
+
 /**
- * Resolves the target Firestore database identifier, defaulting to `(default)` when unset or blank.
+ * Resolves the target Firestore database identifier, defaulting to `marombapp-test`
+ * when unset or blank, and explicitly refusing `(default)` or `default` so client
+ * builds never connect to the legacy shared database (ADR-004, ADR-005).
  */
 export function resolveFirestoreDatabaseId(
   rawDatabaseId: string | undefined = import.meta.env.VITE_FIRESTORE_DATABASE_ID as string | undefined,
 ): string {
   const trimmed = rawDatabaseId?.trim();
-  return trimmed ? trimmed : '(default)';
+  if (!trimmed) {
+    return DEFAULT_SAFE_FIRESTORE_DATABASE_ID;
+  }
+  const normalized = trimmed.toLowerCase();
+  if (normalized === '(default)' || normalized === 'default') {
+    throw new Error(
+      `Refusing Firestore database "${trimmed}": (default) is legacy read-only (ADR-004, ADR-005). ` +
+        'Use "marombapp" or "marombapp-test".',
+    );
+  }
+  return trimmed;
 }
 
 export const FIRESTORE_DATABASE_ID = resolveFirestoreDatabaseId();
@@ -66,10 +80,11 @@ export function getFirebaseAuth(): Auth {
 
 /**
  * Returns the shared Firestore client configured with multi-tab IndexedDB persistence.
- * Targets `FIRESTORE_DATABASE_ID` (`(default)` or named database) and queues offline writes locally.
+ * Resolves and validates the named Firestore database ID before connecting and queues offline writes locally.
  */
 export function getFirestoreDb(): Firestore {
   if (!dbInstance) {
+    const databaseId = resolveFirestoreDatabaseId();
     dbInstance = initializeFirestore(
       getFirebaseApp(),
       {
@@ -77,7 +92,7 @@ export function getFirestoreDb(): Firestore {
           tabManager: persistentMultipleTabManager(),
         }),
       },
-      FIRESTORE_DATABASE_ID,
+      databaseId,
     );
   }
   return dbInstance;

@@ -35,16 +35,39 @@ export function resolveFirebaseAdminProjectId(
   return viteFirebaseProject || undefined;
 }
 
+export const DEFAULT_SAFE_FIRESTORE_DATABASE_ID = 'marombapp-test';
+
+/**
+ * Resolves the target Firestore database ID from environment configuration.
+ * Defaults to `marombapp-test` when unset or blank, and explicitly refuses
+ * `(default)` or `default` so the BFF never targets the legacy shared database
+ * (ADR-004, ADR-005).
+ */
+export function resolveFirestoreDatabaseId(rawDatabaseId: string | undefined): string {
+  const trimmed = (rawDatabaseId ?? '').trim();
+  if (!trimmed) {
+    return DEFAULT_SAFE_FIRESTORE_DATABASE_ID;
+  }
+  const normalized = trimmed.toLowerCase();
+  if (normalized === '(default)' || normalized === 'default') {
+    throw new Error(
+      `Refusing Firestore database "${trimmed}": (default) is legacy read-only (ADR-004, ADR-005). ` +
+        'Use "marombapp" or "marombapp-test".',
+    );
+  }
+  return trimmed;
+}
+
 /**
  * Resolves current BFF runtime settings from the provided environment map.
- * When optional variables are unset, returns safe defaults while keeping
- * ALLOWED_UID empty so authentication fails closed.
+ * When optional variables are unset, returns safe defaults (`marombapp-test` for
+ * Firestore) while keeping ALLOWED_UID empty so authentication fails closed.
  */
 export function getServerConfig(env: NodeJS.ProcessEnv = process.env): BffRuntimeConfig {
   const rawPort = Number(env.PORT);
   const port = Number.isFinite(rawPort) && rawPort > 0 ? rawPort : 8080;
   const revision = (env.K_REVISION ?? '').trim() || 'local';
-  const firestoreDatabase = (env.FIRESTORE_DATABASE_ID ?? '').trim() || '(default)';
+  const firestoreDatabase = resolveFirestoreDatabaseId(env.FIRESTORE_DATABASE_ID);
   const allowedUid = (env.ALLOWED_UID ?? '').trim();
   const firebaseProjectId = resolveFirebaseAdminProjectId(env) ?? '';
   const googleCloudProject = (env.GOOGLE_CLOUD_PROJECT ?? '').trim();
