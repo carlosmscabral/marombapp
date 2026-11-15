@@ -5,11 +5,12 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Circle, Play, Plus } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Circle, Play, Plus, Trash2 } from 'lucide-react';
 import { cn } from '../../components/Layout';
 import {
   addPlanDay,
   debounce,
+  deletePlan,
   deletePlanDay,
   renamePlan,
   reorderPlanDays,
@@ -87,11 +88,23 @@ export function PlanDetailView({
     await deletePlanDay(plan.id, day.id).catch(() => {});
   };
 
+  const handleDeletePlan = async () => {
+    const displayName = name.trim() || plan.name;
+    if (!confirm(`Delete plan "${displayName}"? This cannot be undone.`)) return;
+    debouncedRename.cancel();
+    await deletePlan(plan.id).catch(() => {});
+    onBack();
+  };
+
+  const cancelAddDay = () => {
+    setAddingDay(false);
+    setNewDayName('');
+  };
+
   const submitAddDay = async () => {
     const dayName = newDayName.trim();
     if (!dayName) {
-      setAddingDay(false);
-      setNewDayName('');
+      cancelAddDay();
       return;
     }
     const id = await addPlanDay(plan.id, dayName);
@@ -106,7 +119,7 @@ export function PlanDetailView({
         <button
           type="button"
           onClick={onBack}
-          className="w-10 h-10 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors"
+          className="w-11 h-11 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors"
           aria-label="Back to plans"
         >
           <ArrowLeft className="w-5 h-5" />
@@ -132,26 +145,41 @@ export function PlanDetailView({
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={async () => {
-          if (plan.active) return;
-          await setActivePlan(plan.id).catch(() => {});
-        }}
-        className={cn(
-          'w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border transition-colors',
-          plan.active
-            ? 'bg-primary/10 border-primary/30 text-primary cursor-default'
-            : 'bg-surface-container-low border-outline-variant/20 text-on-surface hover:bg-surface-container-high',
-        )}
-      >
-        <span className="flex items-center gap-2">
-          {plan.active ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
-          <span className="font-headline text-sm font-medium">
-            {plan.active ? 'Active plan' : 'Set as active plan'}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={async () => {
+            if (plan.active) return;
+            await setActivePlan(plan.id).catch(() => {});
+          }}
+          className={cn(
+            'flex-1 min-h-11 flex items-center justify-between gap-3 px-4 py-3 rounded-xl border transition-colors',
+            plan.active
+              ? 'bg-primary/10 border-primary/30 text-primary cursor-default'
+              : 'bg-surface-container-low border-outline-variant/20 text-on-surface hover:bg-surface-container-high',
+          )}
+        >
+          <span className="flex items-center gap-2">
+            {plan.active ? (
+              <CheckCircle2 className="w-5 h-5" />
+            ) : (
+              <Circle className="w-5 h-5" />
+            )}
+            <span className="font-headline text-sm font-medium">
+              {plan.active ? 'Active plan' : 'Set as active plan'}
+            </span>
           </span>
-        </span>
-      </button>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => void handleDeletePlan()}
+          className="shrink-0 min-h-11 px-3.5 rounded-xl bg-secondary/15 text-secondary border border-secondary/30 font-label text-xs uppercase tracking-widest font-semibold hover:bg-secondary/25 transition-colors inline-flex items-center gap-1.5"
+        >
+          <Trash2 className="w-4 h-4" />
+          Delete plan
+        </button>
+      </div>
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
@@ -190,18 +218,22 @@ export function PlanDetailView({
               onChange={(e) => setNewDayName(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') void submitAddDay();
-                if (e.key === 'Escape') {
-                  setAddingDay(false);
-                  setNewDayName('');
-                }
+                if (e.key === 'Escape') cancelAddDay();
               }}
               placeholder="Day name (e.g. Push 1)"
-              className="flex-1 bg-surface-container-highest/40 rounded-lg px-3 py-2 text-on-surface outline-none focus:ring-1 focus:ring-primary/40"
+              className="flex-1 min-w-0 bg-surface-container-highest/40 rounded-lg px-3 py-2.5 text-on-surface outline-none focus:ring-1 focus:ring-primary/40"
             />
             <button
               type="button"
+              onClick={cancelAddDay}
+              className="min-h-11 px-3 rounded-lg bg-surface-container-high text-on-surface-variant hover:text-on-surface text-sm font-medium transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
               onClick={() => void submitAddDay()}
-              className="px-3 py-2 rounded-lg bg-primary text-on-primary text-sm font-medium"
+              className="min-h-11 px-3.5 rounded-lg bg-primary text-on-primary text-sm font-medium"
             >
               Add
             </button>

@@ -247,7 +247,7 @@ function ActiveSessionView({ session }: { session: Session }) {
           <button
             type="button"
             onClick={() => void handleAbandon()}
-            className="w-full py-2 rounded-lg text-xs font-label font-bold uppercase tracking-widest text-on-surface-variant/70 hover:text-secondary flex items-center justify-center gap-2"
+            className="w-full min-h-11 py-2.5 rounded-lg text-xs font-label font-bold uppercase tracking-widest text-on-surface-variant/70 hover:text-secondary flex items-center justify-center gap-2"
           >
             <Trash2 className="w-4 h-4" />
             Abandon

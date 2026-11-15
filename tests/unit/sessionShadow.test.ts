@@ -33,6 +33,7 @@ vi.mock('firebase/firestore', () => ({
   updateDoc: (ref: DocRef, data: { exercises?: SessionExercise[] }) =>
     mocks.updateDoc(ref, data),
   addDoc: vi.fn(),
+  deleteDoc: vi.fn(),
   limit: vi.fn(),
   onSnapshot: vi.fn(),
   orderBy: vi.fn(),

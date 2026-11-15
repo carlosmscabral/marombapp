@@ -9,6 +9,7 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  getDocsFromCache,
   limit,
   onSnapshot,
   orderBy,
@@ -148,6 +149,22 @@ export async function archivePlan(planId: string): Promise<void> {
 }
 
 /**
+ * Permanently deletes `planId` and every document in its `days` subcollection in one batch.
+ * Falls back to cached day documents and avoids awaiting server ack so offline deletion stays responsive.
+ */
+export async function deletePlan(planId: string): Promise<void> {
+  const db = getFirestoreDb();
+  const col = daysCol(planId);
+  const daysSnap = await getDocs(col).catch(() => getDocsFromCache(col));
+  const batch = writeBatch(db);
+  daysSnap.forEach((d) => {
+    batch.delete(d.ref);
+  });
+  batch.delete(planDoc(planId));
+  void batch.commit().catch(() => {});
+}
+
+/**
  * Appends a new training day to the end of `planId` and returns its document id.
  */
 export async function addPlanDay(planId: string, name: string): Promise<string> {
@@ -176,10 +193,11 @@ export async function renamePlanDay(
 }
 
 /**
- * Deletes a training day document from `planId`.
+ * Deletes a training day document from `planId` without blocking on server acknowledgment.
  */
-export async function deletePlanDay(planId: string, dayId: string): Promise<void> {
-  await deleteDoc(dayDoc(planId, dayId));
+export function deletePlanDay(planId: string, dayId: string): Promise<void> {
+  void deleteDoc(dayDoc(planId, dayId)).catch(() => {});
+  return Promise.resolve();
 }
 
 /**

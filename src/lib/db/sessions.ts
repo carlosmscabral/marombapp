@@ -5,6 +5,7 @@
 
 import {
   addDoc,
+  deleteDoc,
   getDoc,
   getDocFromCache,
   limit,
@@ -278,4 +279,14 @@ export async function abandonSession(sessionId: string): Promise<void> {
     finishedAt: Date.now(),
     status: 'abandoned',
   });
+}
+
+/**
+ * Permanently deletes `sessionId` from history and clears its in-memory mutation shadow.
+ * Starts `deleteDoc` without awaiting server acknowledgment so offline deletion never stalls navigation.
+ */
+export function deleteSession(sessionId: string): Promise<void> {
+  clearShadow(sessionId);
+  void deleteDoc(sessionDoc(sessionId)).catch(() => {});
+  return Promise.resolve();
 }

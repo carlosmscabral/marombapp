@@ -101,6 +101,7 @@ in-browser fakes. The `lead` approved this choice on issue #2.
 | Lazy Analytics route | `tests/e2e/analytics.spec.ts` | the analytics route loads its code-split chunk on demand |
 | Analytics totals, pie, recent sessions, overload chart | `tests/e2e/analytics.spec.ts` | an empty history…, weekly totals, muscle split… |
 | SessionDetail | `tests/e2e/analytics.spec.ts` | a recent session opens its detail…, session detail shows incomplete sets… |
+| Deletion & accidental-creation recovery (#13) | `tests/unit/deletion.test.ts`, `tests/e2e/deletion.spec.ts`, `tests/e2e/deletion-sessions.spec.ts` | inline creation cancel, mistaken-day delete, hard plan delete (with child days), finished session delete, dangling plan/day session survival, >=44px touch targets |
 | PWA manifest and offline reload | `tests/e2e/offline.spec.ts` | all |
 
 ## Add a spec

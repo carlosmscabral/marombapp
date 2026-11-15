@@ -9,6 +9,7 @@ import { cn, SignatureBar } from '../../components/Layout';
 import {
   archivePlan,
   createPlan,
+  deletePlan,
   renamePlan,
   setActivePlan,
   subscribePlanDays,
@@ -28,11 +29,15 @@ export function PlanListView({ plans, onOpen }: PlanListViewProps) {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
 
+  const cancelCreate = () => {
+    setCreating(false);
+    setNewName('');
+  };
+
   const submitCreate = async () => {
     const name = newName.trim();
     if (!name) {
-      setCreating(false);
-      setNewName('');
+      cancelCreate();
       return;
     }
     const id = await createPlan(name);
@@ -63,18 +68,22 @@ export function PlanListView({ plans, onOpen }: PlanListViewProps) {
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') void submitCreate();
-              if (e.key === 'Escape') {
-                setCreating(false);
-                setNewName('');
-              }
+              if (e.key === 'Escape') cancelCreate();
             }}
             placeholder="Plan name (e.g. PPL)"
-            className="flex-1 bg-surface-container-highest/40 rounded-lg px-3 py-2 text-on-surface outline-none focus:ring-1 focus:ring-primary/40"
+            className="flex-1 min-w-0 bg-surface-container-highest/40 rounded-lg px-3 py-2.5 text-on-surface outline-none focus:ring-1 focus:ring-primary/40"
           />
           <button
             type="button"
+            onClick={cancelCreate}
+            className="min-h-11 px-3 rounded-lg bg-surface-container-high text-on-surface-variant hover:text-on-surface text-sm font-medium transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
             onClick={() => void submitCreate()}
-            className="px-3 py-2 rounded-lg bg-primary text-on-primary text-sm font-medium"
+            className="min-h-11 px-3.5 rounded-lg bg-primary text-on-primary text-sm font-medium"
           >
             Create
           </button>
@@ -185,7 +194,7 @@ function PlanRow({ plan, onOpen }: { plan: Plan; onOpen: () => void }) {
               e.stopPropagation();
               setMenuOpen((v) => !v);
             }}
-            className="w-9 h-9 rounded-md flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors"
+            className="w-11 h-11 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors"
             aria-label="More"
           >
             <MoreVertical className="w-5 h-5" />
@@ -198,7 +207,7 @@ function PlanRow({ plan, onOpen }: { plan: Plan; onOpen: () => void }) {
                 onClick={() => setMenuOpen(false)}
                 aria-label="Close menu"
               />
-              <div className="absolute right-0 top-10 z-20 w-44 bg-surface-container-high rounded-lg shadow-lg overflow-hidden border border-outline-variant/15">
+              <div className="absolute right-0 top-12 z-20 w-44 bg-surface-container-high rounded-lg shadow-lg overflow-hidden border border-outline-variant/15">
                 {!plan.active && (
                   <MenuItem
                     label="Set Active"
@@ -218,10 +227,20 @@ function PlanRow({ plan, onOpen }: { plan: Plan; onOpen: () => void }) {
                 />
                 <MenuItem
                   label="Archive"
-                  variant="danger"
                   onClick={async () => {
                     setMenuOpen(false);
                     await archivePlan(plan.id).catch(() => {});
+                  }}
+                />
+                <MenuItem
+                  label="Delete"
+                  variant="danger"
+                  onClick={async () => {
+                    setMenuOpen(false);
+                    if (!confirm(`Delete plan "${plan.name}"? This cannot be undone.`)) {
+                      return;
+                    }
+                    await deletePlan(plan.id).catch(() => {});
                   }}
                 />
               </div>
@@ -247,8 +266,8 @@ function MenuItem({
       type="button"
       onClick={onClick}
       className={cn(
-        'w-full text-left px-3 py-2 text-sm hover:bg-surface-container-highest transition-colors',
-        variant === 'danger' ? 'text-secondary' : 'text-on-surface',
+        'w-full min-h-11 text-left px-3 py-2.5 text-sm hover:bg-surface-container-highest transition-colors flex items-center',
+        variant === 'danger' ? 'text-secondary font-medium' : 'text-on-surface',
       )}
     >
       {label}

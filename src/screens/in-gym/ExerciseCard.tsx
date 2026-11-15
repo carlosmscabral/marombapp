@@ -134,7 +134,7 @@ export function ExerciseCard({ sessionId, exercise, index, history }: ExerciseCa
               type="button"
               onClick={handleRemoveExercise}
               aria-label={`Remove ${exercise.exerciseName}`}
-              className="w-7 h-7 rounded-md flex items-center justify-center text-on-surface-variant/60 hover:text-secondary hover:bg-surface-container-high transition-colors"
+              className="w-11 h-11 rounded-lg flex items-center justify-center text-on-surface-variant/60 hover:text-secondary hover:bg-surface-container-high transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -184,7 +184,7 @@ export function ExerciseCard({ sessionId, exercise, index, history }: ExerciseCa
           <button
             type="button"
             onClick={() => void addSetToExercise(sessionId, index)}
-            className="flex-1 py-2 rounded-lg border border-dashed border-outline-variant/40 text-sm font-label font-semibold text-on-surface-variant hover:text-primary hover:border-primary/40 transition-colors flex items-center justify-center gap-2"
+            className="flex-1 min-h-11 py-2 rounded-lg border border-dashed border-outline-variant/40 text-sm font-label font-semibold text-on-surface-variant hover:text-primary hover:border-primary/40 transition-colors flex items-center justify-center gap-2"
           >
             <Plus className="w-4 h-4" />
             Add set
@@ -194,7 +194,7 @@ export function ExerciseCard({ sessionId, exercise, index, history }: ExerciseCa
               type="button"
               onClick={handleRemoveLastSet}
               aria-label="Remove last set"
-              className="px-3 py-2 rounded-lg border border-dashed border-outline-variant/30 text-sm font-label font-semibold text-on-surface-variant/70 hover:text-secondary hover:border-secondary/40 transition-colors flex items-center justify-center gap-1"
+              className="min-w-11 min-h-11 px-3 py-2 rounded-lg border border-dashed border-outline-variant/30 text-sm font-label font-semibold text-on-surface-variant/70 hover:text-secondary hover:border-secondary/40 transition-colors flex items-center justify-center gap-1"
             >
               <Minus className="w-4 h-4" />
             </button>

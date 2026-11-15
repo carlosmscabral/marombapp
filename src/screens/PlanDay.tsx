@@ -69,11 +69,18 @@ export function PlanDay({ planId, day, library, onBack }: PlanDayProps) {
   };
 
   const handleDeleteDay = async () => {
-    if (!confirm(`Delete training day "${day.name}"?`)) return;
+    const displayName = name.trim() || day.name;
+    if (!confirm(`Delete training day "${displayName}"?`)) return;
     debouncedRename.cancel();
     cancelExercises();
     await deletePlanDay(planId, day.id).catch(() => {});
     onBack();
+  };
+
+  const handleRemoveExercise = (idx: number, exerciseName: string) => {
+    const displayDayName = name.trim() || day.name;
+    if (!confirm(`Remove "${exerciseName}" from "${displayDayName}"?`)) return;
+    removeExercise(idx);
   };
 
   return (
@@ -82,7 +89,7 @@ export function PlanDay({ planId, day, library, onBack }: PlanDayProps) {
         <button
           type="button"
           onClick={onBack}
-          className="w-10 h-10 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors"
+          className="w-11 h-11 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors"
           aria-label="Back"
         >
           <ArrowLeft className="w-5 h-5" />
@@ -108,20 +115,20 @@ export function PlanDay({ planId, day, library, onBack }: PlanDayProps) {
             placeholder="Day name"
           />
         </div>
-        <button
-          type="button"
-          onClick={() => void handleDeleteDay()}
-          className="w-10 h-10 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-secondary hover:bg-surface-container-high transition-colors"
-          aria-label="Delete training day"
-        >
-          <Trash2 className="w-5 h-5" />
-        </button>
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <span className="text-on-surface-variant text-sm">
           {exercises.length} {exercises.length === 1 ? 'exercise' : 'exercises'}
         </span>
+        <button
+          type="button"
+          onClick={() => void handleDeleteDay()}
+          className="min-h-11 px-3.5 rounded-xl bg-secondary/15 text-secondary border border-secondary/30 font-label text-xs uppercase tracking-widest font-semibold hover:bg-secondary/25 transition-colors inline-flex items-center gap-1.5"
+        >
+          <Trash2 className="w-4 h-4" />
+          Delete training day
+        </button>
       </div>
 
       <div className="space-y-4">
@@ -178,8 +185,10 @@ export function PlanDay({ planId, day, library, onBack }: PlanDayProps) {
 
                   <button
                     type="button"
-                    onClick={() => removeExercise(idx)}
-                    className="w-8 h-8 rounded-md flex items-center justify-center text-on-surface-variant hover:text-secondary hover:bg-surface-container-high transition-colors"
+                    onClick={() =>
+                      handleRemoveExercise(idx, libEx?.name ?? 'Unknown exercise')
+                    }
+                    className="w-11 h-11 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-secondary hover:bg-surface-container-high transition-colors"
                     aria-label="Remove exercise"
                   >
                     <X className="w-4 h-4" />

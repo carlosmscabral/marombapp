@@ -63,7 +63,7 @@ export function DayRow({
           type="button"
           onClick={onDelete}
           aria-label={`Delete ${day.name}`}
-          className="w-8 h-8 rounded-md flex items-center justify-center text-on-surface-variant/60 hover:text-secondary hover:bg-surface-container-high transition-colors"
+          className="w-11 h-11 rounded-lg flex items-center justify-center text-secondary/80 hover:text-secondary hover:bg-secondary/15 transition-colors"
         >
           <Trash2 className="w-4 h-4" />
         </button>

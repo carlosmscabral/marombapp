@@ -1,13 +1,13 @@
 /**
- * Read-only completed workout detail screen (`/sessions/:sessionId`).
- * Displays workout duration, total volume, set completion count, notes, and per-set breakdown.
+ * Completed workout detail screen (`/sessions/:sessionId`).
+ * Displays workout duration, total volume, set completion count, notes, per-set breakdown, and session deletion.
  */
 
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Calendar, CheckCircle2, Circle } from 'lucide-react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, Calendar, CheckCircle2, Circle, Trash2 } from 'lucide-react';
 import { SignatureBar } from '../components/Layout';
-import { getSession } from '../lib/db';
+import { deleteSession, getSession } from '../lib/db';
 import { formatDateTime, formatDuration } from '../lib/format';
 import type { Session } from '../types';
 
@@ -16,6 +16,7 @@ import type { Session } from '../types';
  */
 export function SessionDetail() {
   const { sessionId } = useParams<{ sessionId: string }>();
+  const navigate = useNavigate();
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -85,16 +86,31 @@ export function SessionDetail() {
     }
   }
 
+  const handleDeleteSession = async () => {
+    const label = session.dayName || 'Session';
+    if (!confirm(`Delete session "${label}"? This cannot be undone.`)) return;
+    await deleteSession(session.id).catch(() => {});
+    navigate('/analytics', { replace: true });
+  };
+
   return (
     <div className="px-4 py-6 max-w-2xl mx-auto w-full space-y-6 pb-24">
-      <div>
+      <div className="flex items-center justify-between gap-3">
         <Link
           to="/analytics"
-          className="inline-flex items-center gap-2 text-xs font-label font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary"
+          className="min-h-11 inline-flex items-center gap-2 text-xs font-label font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary"
         >
           <ArrowLeft className="w-4 h-4" />
           Back
         </Link>
+        <button
+          type="button"
+          onClick={() => void handleDeleteSession()}
+          className="min-h-11 px-3.5 rounded-xl bg-secondary/15 text-secondary border border-secondary/30 font-label text-xs uppercase tracking-widest font-semibold hover:bg-secondary/25 transition-colors inline-flex items-center gap-1.5"
+        >
+          <Trash2 className="w-4 h-4" />
+          Delete session
+        </button>
       </div>
 
       <header className="space-y-2">

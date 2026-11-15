@@ -95,6 +95,7 @@ export const getDocFromCache = getDoc;
 export async function getDocs(q: CollectionReference | Query) {
   return querySnap(q.path, q.kind === 'query' ? q.constraints : []);
 }
+export const getDocsFromCache = getDocs;
 
 export async function addDoc(col: CollectionReference, data: DocData): Promise<DocumentReference> {
   const ref = doc(col);

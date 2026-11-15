@@ -55,7 +55,7 @@ export function ExerciseDetailSheet({
             <button
               type="button"
               onClick={() => onEdit(exercise)}
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-surface-container-high text-on-surface font-label text-xs uppercase tracking-widest font-semibold hover:bg-surface-container-highest transition-colors"
+              className="flex-1 min-h-11 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-surface-container-high text-on-surface font-label text-xs uppercase tracking-widest font-semibold hover:bg-surface-container-highest transition-colors"
             >
               <Edit3 className="w-4 h-4" />
               Edit
@@ -63,7 +63,7 @@ export function ExerciseDetailSheet({
             <button
               type="button"
               onClick={() => setConfirmDelete(true)}
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-secondary/15 text-secondary border border-secondary/30 font-label text-xs uppercase tracking-widest font-semibold hover:bg-secondary/25 transition-colors"
+              className="flex-1 min-h-11 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-secondary/15 text-secondary border border-secondary/30 font-label text-xs uppercase tracking-widest font-semibold hover:bg-secondary/25 transition-colors"
             >
               <Trash2 className="w-4 h-4" />
               Delete
@@ -84,14 +84,14 @@ export function ExerciseDetailSheet({
               <button
                 type="button"
                 onClick={() => setConfirmDelete(false)}
-                className="flex-1 px-3 py-2 rounded-lg bg-surface-container-high text-on-surface font-label text-xs uppercase tracking-widest font-semibold"
+                className="flex-1 min-h-11 px-3 py-2 rounded-lg bg-surface-container-high text-on-surface font-label text-xs uppercase tracking-widest font-semibold"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={() => void handleDelete()}
-                className="flex-1 px-3 py-2 rounded-lg bg-secondary text-on-secondary font-label text-xs uppercase tracking-widest font-semibold"
+                className="flex-1 min-h-11 px-3 py-2 rounded-lg bg-secondary text-on-secondary font-label text-xs uppercase tracking-widest font-semibold"
               >
                 Confirm
               </button>
