@@ -5,6 +5,7 @@
 
 import { Dumbbell, AlertCircle } from 'lucide-react';
 import { useAuth } from '../lib/auth';
+import { PT_BR } from '../lib/i18n/pt-BR';
 import { SignatureBar } from '../components/Layout';
 
 /**
@@ -27,7 +28,7 @@ export function SignIn() {
                 MarombApp
               </h1>
               <p className="font-body text-sm text-on-surface-variant">
-                Sign in to track your training
+                {PT_BR.auth.subtitle}
               </p>
             </div>
 
@@ -35,7 +36,7 @@ export function SignIn() {
               <div className="w-full flex items-start gap-2 p-3 rounded-lg bg-secondary-container/20 border border-secondary/30 text-left">
                 <AlertCircle className="w-4 h-4 text-secondary mt-0.5 shrink-0" />
                 <p className="text-xs text-on-surface-variant">
-                  This account is not authorized for MarombApp.
+                  {PT_BR.auth.unauthorized}
                 </p>
               </div>
             )}
@@ -53,7 +54,7 @@ export function SignIn() {
               disabled={loading}
               className="w-full px-4 py-3 rounded-xl bg-primary text-on-primary font-label font-semibold text-sm tracking-wide hover:bg-primary-dim transition-colors disabled:opacity-50"
             >
-              Sign in with Google
+              {PT_BR.auth.signInWithGoogle}
             </button>
           </div>
         </div>

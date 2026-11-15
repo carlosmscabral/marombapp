@@ -1,9 +1,38 @@
 /**
- * Shared date, duration, and label formatters for MarombApp screens.
- * Centralizes relative date math and tabular clock formatting across views.
+ * Shared `pt-BR` date, number, duration, and label formatters for MarombApp screens (#16, REQ-002).
+ * Centralizes relative date math, `Intl` `pt-BR` formatting, and tabular clock formatting across views.
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const PT_BR_INTEGER = new Intl.NumberFormat('pt-BR');
+const PT_BR_DECIMAL = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 });
+const PT_BR_SHORT_DATE = new Intl.DateTimeFormat('pt-BR', {
+  day: 'numeric',
+  month: 'short',
+});
+const PT_BR_DATE_TIME = new Intl.DateTimeFormat('pt-BR', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+/**
+ * Formats a rounded integer in `pt-BR` grouping (for example `1.600`).
+ */
+export function formatNumber(value: number): string {
+  if (!Number.isFinite(value)) return '0';
+  return PT_BR_INTEGER.format(Math.round(value));
+}
+
+/**
+ * Formats a decimal number in `pt-BR` notation with up to two fraction digits (for example `62,5`).
+ */
+export function formatDecimal(value: number): string {
+  if (!Number.isFinite(value)) return '0';
+  return PT_BR_DECIMAL.format(value);
+}
 
 /**
  * Formats an elapsed millisecond counter as `mm:ss` or `h:mm:ss`.
@@ -36,44 +65,38 @@ export function formatDuration(ms: number, padMinutes = false): string {
 }
 
 /**
- * Formats a Unix millisecond timestamp as a short calendar label (for example `Jul 5`).
+ * Formats a Unix millisecond timestamp as a short `pt-BR` calendar label (for example `5 de jul.`).
  */
 export function formatDateShort(ts: number): string {
   if (!ts) return '—';
-  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return PT_BR_SHORT_DATE.format(new Date(ts));
 }
 
 /**
- * Formats a Unix millisecond timestamp with weekday, date, and local clock time.
+ * Formats a Unix millisecond timestamp with `pt-BR` weekday, date, and local clock time.
  */
 export function formatDateTime(ts: number): string {
   if (!ts) return '—';
   try {
-    return new Date(ts).toLocaleString(undefined, {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return PT_BR_DATE_TIME.format(new Date(ts));
   } catch {
     return new Date(ts).toString();
   }
 }
 
 /**
- * Formats a timestamp relative to now (`Today`, `Yesterday`, `N days ago`, or `Jul 5`).
+ * Formats a timestamp relative to now in `pt-BR` (`Hoje`, `Ontem`, `há N dias`, or short calendar label).
  */
 export function formatRelative(ts: number): string {
   if (!ts) return '—';
   const now = Date.now();
   const diff = now - ts;
   if (diff < DAY_MS && new Date(ts).toDateString() === new Date(now).toDateString()) {
-    return 'Today';
+    return 'Hoje';
   }
-  if (diff < 2 * DAY_MS) return 'Yesterday';
+  if (diff < 2 * DAY_MS) return 'Ontem';
   const days = Math.floor(diff / DAY_MS);
-  if (days < 7) return `${days} days ago`;
+  if (days < 7) return days === 1 ? 'há 1 dia' : `há ${days} dias`;
   return formatDateShort(ts);
 }
 

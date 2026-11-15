@@ -8,6 +8,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { ActiveSessionProvider } from './lib/activeSession';
 import { AuthProvider, useAuth } from './lib/auth';
+import { PT_BR } from './lib/i18n/pt-BR';
 import { seedLibraryIfEmpty } from './lib/seed';
 import { InGym } from './screens/InGym';
 import { Library } from './screens/Library';
@@ -21,7 +22,7 @@ const Analytics = lazy(() => import('./screens/Analytics'));
 function RouteLoader() {
   return (
     <div className="px-4 py-12 text-center font-label text-sm text-on-surface-variant uppercase tracking-widest">
-      Loading…
+      {PT_BR.common.loading}
     </div>
   );
 }
@@ -61,7 +62,7 @@ function Gate() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background text-on-surface-variant">
-        <span className="font-label text-sm tracking-widest uppercase">Loading…</span>
+        <span className="font-label text-sm tracking-widest uppercase">{PT_BR.common.loading}</span>
       </div>
     );
   }

@@ -21,6 +21,7 @@ import {
   type User,
 } from 'firebase/auth';
 import { getFirebaseAuth, resolveAllowedUid } from './firebase';
+import { PT_BR } from './i18n/pt-BR';
 
 interface AuthContextValue {
   user: User | null;
@@ -120,7 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             try {
               await signInWithRedirect(auth, provider);
             } catch (redirectErr) {
-              setError((redirectErr as Error)?.message || 'sign-in failed');
+              setError((redirectErr as Error)?.message || PT_BR.auth.signInFailed);
             }
             return;
           }
@@ -128,7 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             code !== 'auth/popup-closed-by-user' &&
             code !== 'auth/cancelled-popup-request'
           ) {
-            setError((err as Error)?.message || 'sign-in failed');
+            setError((err as Error)?.message || PT_BR.auth.signInFailed);
           }
         }
       },

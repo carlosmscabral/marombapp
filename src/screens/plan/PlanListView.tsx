@@ -15,6 +15,7 @@ import {
   setActivePlan,
   subscribePlanDays,
 } from '../../lib/db';
+import { PT_BR } from '../../lib/i18n/pt-BR';
 import type { Plan } from '../../types';
 
 export interface PlanListViewProps {
@@ -57,10 +58,10 @@ export function PlanListView({ plans, onOpen }: PlanListViewProps) {
     <div className="px-4 py-6 space-y-6 max-w-4xl mx-auto w-full">
       <section className="space-y-1">
         <p className="text-primary font-label text-xs tracking-[0.2em] uppercase">
-          Your Plans
+          {PT_BR.plan.kicker}
         </p>
         <h2 className="font-headline text-3xl font-bold tracking-tight">
-          Training Plans
+          {PT_BR.plan.title}
         </h2>
       </section>
 
@@ -74,7 +75,7 @@ export function PlanListView({ plans, onOpen }: PlanListViewProps) {
               if (e.key === 'Enter') void submitCreate();
               if (e.key === 'Escape') cancelCreate();
             }}
-            placeholder="Plan name (e.g. PPL)"
+            placeholder={PT_BR.plan.namePlaceholderExample}
             className="flex-1 min-w-0 bg-surface-container-highest/40 rounded-lg px-3 py-2.5 text-on-surface outline-none focus:ring-1 focus:ring-primary/40"
           />
           <button
@@ -82,14 +83,14 @@ export function PlanListView({ plans, onOpen }: PlanListViewProps) {
             onClick={cancelCreate}
             className="min-h-11 px-3 rounded-lg bg-surface-container-high text-on-surface-variant hover:text-on-surface text-sm font-medium transition-colors"
           >
-            Cancel
+            {PT_BR.common.cancel}
           </button>
           <button
             type="button"
             onClick={() => void submitCreate()}
             className="min-h-11 px-3.5 rounded-lg bg-primary text-on-primary text-sm font-medium"
           >
-            Create
+            {PT_BR.common.create}
           </button>
         </div>
       ) : (
@@ -99,22 +100,20 @@ export function PlanListView({ plans, onOpen }: PlanListViewProps) {
           className="w-full flex items-center justify-center gap-2 bg-surface-container-highest text-primary font-headline font-medium px-6 py-3 rounded-xl border border-primary/20 hover:bg-surface-bright transition-colors"
         >
           <Plus className="w-5 h-5" />
-          Create plan
+          {PT_BR.plan.createPlan}
         </button>
       )}
 
       {visiblePlans.length === 0 && !creating && (
         <div className="bg-surface-container-low rounded-xl p-8 text-center border border-dashed border-outline-variant/30">
-          <p className="text-on-surface-variant text-sm">
-            You don't have any plans yet.
-          </p>
+          <p className="text-on-surface-variant text-sm">{PT_BR.plan.emptyPlans}</p>
           <button
             type="button"
             onClick={() => setCreating(true)}
             className="mt-4 inline-flex items-center gap-2 bg-primary text-on-primary font-headline font-medium px-5 py-2.5 rounded-xl"
           >
             <Plus className="w-4 h-4" />
-            Create your first plan
+            {PT_BR.plan.createFirstPlan}
           </button>
         </div>
       )}
@@ -194,14 +193,12 @@ function PlanRow({
             )}
             {plan.active && (
               <span className="bg-primary/15 text-primary text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                Active
+                {PT_BR.plan.activeBadge}
               </span>
             )}
           </div>
           <p className="text-on-surface-variant text-xs mt-0.5">
-            {dayCount == null
-              ? '…'
-              : `${dayCount} ${dayCount === 1 ? 'day' : 'days'}`}
+            {dayCount == null ? '…' : PT_BR.common.dayCount(dayCount)}
           </p>
         </button>
 
@@ -213,7 +210,7 @@ function PlanRow({
               setMenuOpen((v) => !v);
             }}
             className="w-11 h-11 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors"
-            aria-label="More"
+            aria-label={PT_BR.plan.moreMenu}
           >
             <MoreVertical className="w-5 h-5" />
           </button>
@@ -223,12 +220,12 @@ function PlanRow({
                 type="button"
                 className="fixed inset-0 z-10 cursor-default"
                 onClick={() => setMenuOpen(false)}
-                aria-label="Close menu"
+                aria-label={PT_BR.plan.closeMenu}
               />
               <div className="absolute right-0 top-12 z-20 w-44 bg-surface-container-high rounded-lg shadow-lg overflow-hidden border border-outline-variant/15">
                 {!plan.active && (
                   <MenuItem
-                    label="Set Active"
+                    label={PT_BR.plan.setActive}
                     onClick={async () => {
                       setMenuOpen(false);
                       await setActivePlan(plan.id).catch(() => {});
@@ -236,7 +233,7 @@ function PlanRow({
                   />
                 )}
                 <MenuItem
-                  label="Rename"
+                  label={PT_BR.plan.rename}
                   onClick={() => {
                     setMenuOpen(false);
                     setRenameValue(plan.name);
@@ -244,18 +241,18 @@ function PlanRow({
                   }}
                 />
                 <MenuItem
-                  label="Archive"
+                  label={PT_BR.plan.archive}
                   onClick={async () => {
                     setMenuOpen(false);
                     await archivePlan(plan.id).catch(() => {});
                   }}
                 />
                 <MenuItem
-                  label="Delete"
+                  label={PT_BR.common.delete}
                   variant="danger"
                   onClick={() => {
                     setMenuOpen(false);
-                    if (!confirm(`Delete plan "${plan.name}"? This cannot be undone.`)) {
+                    if (!confirm(PT_BR.plan.confirmDeletePlan(plan.name))) {
                       return;
                     }
                     onDeleted();

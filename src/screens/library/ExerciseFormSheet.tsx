@@ -7,7 +7,7 @@ import { type ReactNode, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { BottomSheet } from '../../components/BottomSheet';
 import { createExercise, updateExercise } from '../../lib/db';
-import { cap } from '../../lib/format';
+import { PT_BR, tMuscle, tSubMuscle } from '../../lib/i18n/pt-BR';
 import {
   MUSCLE_GROUPS,
   SUB_MUSCLES,
@@ -55,7 +55,7 @@ export function ExerciseFormSheet({ editingExercise, onClose }: ExerciseFormShee
       onClose();
     } catch (err) {
       console.error('Save exercise failed', err);
-      setSaveError((err as Error)?.message || 'Save failed');
+      setSaveError((err as Error)?.message || PT_BR.library.saveFailed);
     } finally {
       setSaving(false);
     }
@@ -64,7 +64,11 @@ export function ExerciseFormSheet({ editingExercise, onClose }: ExerciseFormShee
   return (
     <BottomSheet
       onClose={onClose}
-      title={editingExercise ? 'Edit exercise' : 'New exercise'}
+      title={
+        editingExercise
+          ? PT_BR.library.editExerciseTitle
+          : PT_BR.library.newExerciseTitle
+      }
     >
       <form
         onSubmit={(e) => {
@@ -73,19 +77,19 @@ export function ExerciseFormSheet({ editingExercise, onClose }: ExerciseFormShee
         }}
         className="space-y-4"
       >
-        <FormRow label="Name" required>
+        <FormRow label={PT_BR.library.nameLabel} required>
           <input
             type="text"
             required
             autoFocus
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Incline Dumbbell Press"
+            placeholder={PT_BR.library.namePlaceholder}
             className="w-full bg-surface-container border border-outline-variant/30 focus:border-primary focus:outline-none rounded-lg px-3 py-2.5 text-on-surface placeholder:text-outline/50 font-body"
           />
         </FormRow>
 
-        <FormRow label="Primary muscle" required>
+        <FormRow label={PT_BR.library.primaryMuscle} required>
           <select
             value={primaryMuscle}
             onChange={(e) => {
@@ -96,33 +100,33 @@ export function ExerciseFormSheet({ editingExercise, onClose }: ExerciseFormShee
           >
             {MUSCLE_GROUPS.map((m) => (
               <option key={m} value={m}>
-                {cap(m)}
+                {tMuscle(m)}
               </option>
             ))}
           </select>
         </FormRow>
 
-        <FormRow label="Sub-muscle">
+        <FormRow label={PT_BR.library.subMuscle}>
           <select
             value={subMuscle}
             onChange={(e) => setSubMuscle(e.target.value)}
             className="w-full bg-surface-container border border-outline-variant/30 focus:border-primary focus:outline-none rounded-lg px-3 py-2.5 text-on-surface font-body"
           >
-            <option value="">— None —</option>
+            <option value="">{PT_BR.common.noneOption}</option>
             {subOptions.map((s) => (
               <option key={s} value={s}>
-                {s}
+                {tSubMuscle(s)}
               </option>
             ))}
           </select>
         </FormRow>
 
-        <FormRow label="Notes">
+        <FormRow label={PT_BR.library.notes}>
           <textarea
             rows={3}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Cues, tempo, setup…"
+            placeholder={PT_BR.library.notesPlaceholder}
             className="w-full bg-surface-container border border-outline-variant/30 focus:border-primary focus:outline-none rounded-lg px-3 py-2.5 text-on-surface placeholder:text-outline/50 font-body resize-none"
           />
         </FormRow>
@@ -140,14 +144,18 @@ export function ExerciseFormSheet({ editingExercise, onClose }: ExerciseFormShee
             onClick={onClose}
             className="flex-1 px-3 py-3 rounded-xl bg-surface-container-high text-on-surface font-label text-xs uppercase tracking-widest font-semibold"
           >
-            Cancel
+            {PT_BR.common.cancel}
           </button>
           <button
             type="submit"
             disabled={saving || !name.trim()}
             className="flex-1 px-3 py-3 rounded-xl bg-primary text-on-primary font-label text-xs uppercase tracking-widest font-semibold hover:bg-primary-dim transition-colors disabled:opacity-50"
           >
-            {saving ? 'Saving…' : editingExercise ? 'Save' : 'Create'}
+            {saving
+              ? PT_BR.common.saving
+              : editingExercise
+                ? PT_BR.common.save
+                : PT_BR.common.create}
           </button>
         </div>
       </form>

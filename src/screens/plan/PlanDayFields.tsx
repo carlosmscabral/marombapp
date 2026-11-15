@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { PT_BR } from '../../lib/i18n/pt-BR';
 
 export interface NumberFieldProps {
   label: string;
@@ -81,7 +82,7 @@ export function NotesField({ value, onChange, onBlur }: NotesFieldProps) {
   return (
     <div>
       <label className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant block mb-1">
-        Notes
+        {PT_BR.library.notes}
       </label>
       <textarea
         value={text}
@@ -97,7 +98,7 @@ export function NotesField({ value, onChange, onBlur }: NotesFieldProps) {
           onChange(e.target.value);
         }}
         rows={2}
-        placeholder="e.g. paused, tempo 3-1-1…"
+        placeholder={PT_BR.plan.notesPlaceholder}
         className="w-full bg-surface-container-highest/40 text-on-surface text-sm rounded-lg p-2 outline-none focus:ring-1 focus:ring-primary/40 resize-none"
       />
     </div>

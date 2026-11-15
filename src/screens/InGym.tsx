@@ -21,6 +21,7 @@ import {
 } from '../lib/db';
 import { formatElapsed } from '../lib/format';
 import { buildHistoryMap, HISTORY_WINDOW } from '../lib/history';
+import { PT_BR } from '../lib/i18n/pt-BR';
 import { useWakeLock } from '../lib/useWakeLock';
 import type { Exercise, Session } from '../types';
 import { ExerciseCard } from './in-gym/ExerciseCard';
@@ -36,9 +37,11 @@ function EmptyState() {
         <Dumbbell className="w-10 h-10 text-primary" />
       </div>
       <div className="space-y-2">
-        <h2 className="font-headline text-2xl font-bold">No active session</h2>
+        <h2 className="font-headline text-2xl font-bold">
+          {PT_BR.inGym.noActiveSessionTitle}
+        </h2>
         <p className="text-sm text-on-surface-variant">
-          Pick a day from your active plan to start logging sets.
+          {PT_BR.inGym.noActiveSessionBody}
         </p>
       </div>
       <button
@@ -46,7 +49,7 @@ function EmptyState() {
         onClick={() => navigate('/start')}
         className="px-6 py-3 rounded-xl bg-primary text-on-primary font-label font-bold uppercase tracking-widest text-sm"
       >
-        Start workout
+        {PT_BR.inGym.startWorkoutBtn}
       </button>
     </div>
   );
@@ -137,7 +140,7 @@ function ActiveSessionView({ session }: { session: Session }) {
   }, [sessionId]);
 
   const handleFinish = useCallback(async () => {
-    if (!confirm('Finish this workout?')) return;
+    if (!confirm(PT_BR.inGym.confirmFinish)) return;
     clearRest();
     writeSessionNotes.flush();
     await flushPendingWrites();
@@ -146,7 +149,7 @@ function ActiveSessionView({ session }: { session: Session }) {
   }, [sessionId, writeSessionNotes, navigate, clearRest]);
 
   const handleAbandon = useCallback(async () => {
-    if (!confirm('Abandon this workout? Logged sets will be kept in history.')) return;
+    if (!confirm(PT_BR.inGym.confirmAbandon)) return;
     clearRest();
     writeSessionNotes.flush();
     await flushPendingWrites();
@@ -171,7 +174,7 @@ function ActiveSessionView({ session }: { session: Session }) {
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-container-highest border border-outline-variant/20">
             <span className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
             <span className="text-[10px] font-label font-bold tracking-[0.2em] uppercase text-secondary">
-              Active Session
+              {PT_BR.inGym.activeSessionPill}
             </span>
           </div>
           <div className="font-headline text-6xl font-extrabold tracking-tighter text-white tabular-nums">
@@ -179,7 +182,7 @@ function ActiveSessionView({ session }: { session: Session }) {
           </div>
           <p className="font-label text-sm text-on-surface-variant tracking-wide">
             {session.planName ? `${session.planName} • ` : ''}
-            {session.dayName || 'Session'}
+            {session.dayName || PT_BR.inGym.fallbackSessionName}
           </p>
         </section>
 
@@ -187,7 +190,7 @@ function ActiveSessionView({ session }: { session: Session }) {
 
         <section className="bg-surface-container-low rounded-xl p-4 border-l-4 border-secondary">
           <p className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant/60 mb-2">
-            Session notes
+            {PT_BR.inGym.sessionNotesLabel}
           </p>
           <textarea
             value={sessionNotes}
@@ -203,7 +206,7 @@ function ActiveSessionView({ session }: { session: Session }) {
               writeSessionNotes(e.target.value);
             }}
             rows={2}
-            placeholder="How are you feeling today?"
+            placeholder={PT_BR.inGym.sessionNotesPlaceholder}
             className="w-full bg-surface-container rounded-lg px-3 py-2 text-sm font-body outline-none focus:ring-2 focus:ring-primary/40 resize-none placeholder:text-on-surface-variant/50"
           />
         </section>
@@ -211,7 +214,7 @@ function ActiveSessionView({ session }: { session: Session }) {
         <div className="space-y-5">
           {session.exercises.length === 0 ? (
             <div className="bg-surface-container-low rounded-xl p-6 text-center text-sm text-on-surface-variant">
-              This workout has no exercises yet. Add an exercise below to start logging.
+              {PT_BR.inGym.emptyExercises}
             </div>
           ) : (
             session.exercises.map((ex, idx) => (
@@ -232,7 +235,7 @@ function ActiveSessionView({ session }: { session: Session }) {
           className="w-full py-3 rounded-xl bg-surface-container-highest text-primary font-headline font-medium border border-primary/20 hover:bg-surface-bright transition-colors flex items-center justify-center gap-2"
         >
           <Plus className="w-5 h-5" />
-          Add exercise to session
+          {PT_BR.inGym.addExerciseBtn}
         </button>
 
         <div className="pt-2 space-y-3">
@@ -241,7 +244,7 @@ function ActiveSessionView({ session }: { session: Session }) {
             onClick={() => void handleFinish()}
             className="w-full py-4 rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary-container font-headline font-black text-lg flex items-center justify-center gap-3"
           >
-            Finish workout
+            {PT_BR.inGym.finishWorkoutBtn}
             <Flag className="w-5 h-5" />
           </button>
           <button
@@ -250,7 +253,7 @@ function ActiveSessionView({ session }: { session: Session }) {
             className="w-full min-h-11 py-2.5 rounded-lg text-xs font-label font-bold uppercase tracking-widest text-on-surface-variant/70 hover:text-secondary flex items-center justify-center gap-2"
           >
             <Trash2 className="w-4 h-4" />
-            Abandon
+            {PT_BR.inGym.abandonBtn}
           </button>
         </div>
 
@@ -260,7 +263,7 @@ function ActiveSessionView({ session }: { session: Session }) {
             existingIds={session.exercises.map((e) => e.exerciseId)}
             onPick={handlePickExercise}
             onClose={() => setPickerOpen(false)}
-            title="Add Exercise to Session"
+            title={PT_BR.picker.sessionTitle}
           />
         )}
       </div>
@@ -277,7 +280,7 @@ export function InGym() {
   if (loading) {
     return (
       <div className="px-4 py-12 text-center font-label text-sm text-on-surface-variant uppercase tracking-widest">
-        Loading…
+        {PT_BR.common.loading}
       </div>
     );
   }

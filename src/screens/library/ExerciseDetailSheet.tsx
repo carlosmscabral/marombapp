@@ -8,7 +8,7 @@ import { AlertTriangle, Edit3, Trash2 } from 'lucide-react';
 import { BottomSheet } from '../../components/BottomSheet';
 import { cn } from '../../components/Layout';
 import { deleteExercise } from '../../lib/db';
-import { cap } from '../../lib/format';
+import { PT_BR, tExercise, tMuscle, tSubMuscle } from '../../lib/i18n/pt-BR';
 import type { Exercise } from '../../types';
 
 export interface ExerciseDetailSheetProps {
@@ -32,23 +32,30 @@ export function ExerciseDetailSheet({
     onClose();
   };
 
+  const displayName = tExercise(exercise);
+
   return (
-    <BottomSheet onClose={onClose} title="Exercise">
+    <BottomSheet onClose={onClose} title={PT_BR.library.detailTitle}>
       <div className="space-y-4">
         <div>
           <h3 className="font-headline text-2xl font-semibold text-on-surface">
-            {exercise.name}
+            {displayName}
           </h3>
           <div className="flex flex-wrap gap-1.5 mt-2">
-            <Tag color="primary">{cap(exercise.primaryMuscle)}</Tag>
-            {exercise.subMuscle && <Tag>{exercise.subMuscle}</Tag>}
-            {exercise.isCustom && <Tag color="tertiary">Custom</Tag>}
+            <Tag color="primary">{tMuscle(exercise.primaryMuscle)}</Tag>
+            {exercise.subMuscle && <Tag>{tSubMuscle(exercise.subMuscle)}</Tag>}
+            {exercise.isCustom && <Tag color="tertiary">{PT_BR.library.customBadge}</Tag>}
           </div>
         </div>
 
-        <Field label="Primary muscle" value={cap(exercise.primaryMuscle)} />
-        {exercise.subMuscle && <Field label="Sub-muscle" value={exercise.subMuscle} />}
-        <Field label="Notes" value={exercise.notes || '—'} multiline />
+        <Field
+          label={PT_BR.library.primaryMuscle}
+          value={tMuscle(exercise.primaryMuscle)}
+        />
+        {exercise.subMuscle && (
+          <Field label={PT_BR.library.subMuscle} value={tSubMuscle(exercise.subMuscle)} />
+        )}
+        <Field label={PT_BR.library.notes} value={exercise.notes || '—'} multiline />
 
         {exercise.isCustom && (
           <div className="flex gap-2 pt-2">
@@ -58,7 +65,7 @@ export function ExerciseDetailSheet({
               className="flex-1 min-h-11 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-surface-container-high text-on-surface font-label text-xs uppercase tracking-widest font-semibold hover:bg-surface-container-highest transition-colors"
             >
               <Edit3 className="w-4 h-4" />
-              Edit
+              {PT_BR.common.edit}
             </button>
             <button
               type="button"
@@ -66,7 +73,7 @@ export function ExerciseDetailSheet({
               className="flex-1 min-h-11 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-secondary/15 text-secondary border border-secondary/30 font-label text-xs uppercase tracking-widest font-semibold hover:bg-secondary/25 transition-colors"
             >
               <Trash2 className="w-4 h-4" />
-              Delete
+              {PT_BR.common.delete}
             </button>
           </div>
         )}
@@ -76,8 +83,9 @@ export function ExerciseDetailSheet({
             <div className="flex items-start gap-2 mb-3">
               <AlertTriangle className="w-4 h-4 text-secondary mt-0.5 shrink-0" />
               <p className="text-sm text-on-surface font-body">
-                Delete <span className="font-semibold">{exercise.name}</span>? This cannot be
-                undone.
+                {PT_BR.library.confirmDeletePrefix}
+                <span className="font-semibold">{displayName}</span>
+                {PT_BR.library.confirmDeleteSuffix}
               </p>
             </div>
             <div className="flex gap-2">
@@ -86,14 +94,14 @@ export function ExerciseDetailSheet({
                 onClick={() => setConfirmDelete(false)}
                 className="flex-1 min-h-11 px-3 py-2 rounded-lg bg-surface-container-high text-on-surface font-label text-xs uppercase tracking-widest font-semibold"
               >
-                Cancel
+                {PT_BR.common.cancel}
               </button>
               <button
                 type="button"
                 onClick={() => void handleDelete()}
                 className="flex-1 min-h-11 px-3 py-2 rounded-lg bg-secondary text-on-secondary font-label text-xs uppercase tracking-widest font-semibold"
               >
-                Confirm
+                {PT_BR.common.confirm}
               </button>
             </div>
           </div>

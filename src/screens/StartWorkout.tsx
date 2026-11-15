@@ -16,6 +16,7 @@ import {
   subscribeRecentSessions,
 } from '../lib/db';
 import { buildHistoryMap, HISTORY_WINDOW } from '../lib/history';
+import { PT_BR, tExercise } from '../lib/i18n/pt-BR';
 import type { Exercise, Plan, PlanDay, Session } from '../types';
 
 /**
@@ -76,7 +77,7 @@ export function StartWorkout() {
   if (!planReady || sessionLoading) {
     return (
       <div className="px-4 py-12 text-center font-label text-sm text-on-surface-variant uppercase tracking-widest">
-        Loading…
+        {PT_BR.common.loading}
       </div>
     );
   }
@@ -85,14 +86,14 @@ export function StartWorkout() {
     return (
       <div className="px-4 py-12 max-w-2xl mx-auto text-center space-y-4">
         <p className="font-label text-sm text-on-surface-variant uppercase tracking-widest">
-          Resuming current session…
+          {PT_BR.start.resuming}
         </p>
         <Link
           to="/in-gym"
           className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-on-primary font-label font-bold uppercase tracking-widest text-xs"
         >
           <Play className="w-4 h-4" />
-          Go to In-Gym
+          {PT_BR.start.goToInGym}
         </Link>
       </div>
     );
@@ -105,16 +106,18 @@ export function StartWorkout() {
           <Dumbbell className="w-10 h-10 text-primary" />
         </div>
         <div className="space-y-2">
-          <h2 className="font-headline text-2xl font-bold">No active plan</h2>
+          <h2 className="font-headline text-2xl font-bold">
+            {PT_BR.start.noActivePlanTitle}
+          </h2>
           <p className="text-sm text-on-surface-variant">
-            Create a training plan and mark it active before starting a workout.
+            {PT_BR.start.noActivePlanBody}
           </p>
         </div>
         <Link
           to="/plan"
           className="px-6 py-3 rounded-xl bg-primary text-on-primary font-label font-bold uppercase tracking-widest text-sm"
         >
-          Go to plans
+          {PT_BR.start.goToPlans}
         </Link>
       </div>
     );
@@ -124,21 +127,19 @@ export function StartWorkout() {
     <div className="px-4 py-6 max-w-2xl mx-auto w-full space-y-6 pb-24">
       <header className="space-y-1">
         <p className="font-label text-[10px] uppercase tracking-[0.2em] text-on-surface-variant/60">
-          Start workout
+          {PT_BR.start.kicker}
         </p>
         <h1 className="font-headline text-3xl font-bold">{plan.name}</h1>
-        <p className="text-sm text-on-surface-variant">
-          Pick a training day to begin logging.
-        </p>
+        <p className="text-sm text-on-surface-variant">{PT_BR.start.pickDayPrompt}</p>
       </header>
 
       <SignatureBar />
 
       {days.length === 0 ? (
         <div className="bg-surface-container-low rounded-xl p-6 text-center text-sm text-on-surface-variant">
-          This plan has no days yet.{' '}
+          {PT_BR.start.noDaysPrefix}{' '}
           <Link to="/plan" className="text-primary font-semibold">
-            Add a day
+            {PT_BR.start.addADayLink}
           </Link>
           .
         </div>
@@ -152,7 +153,10 @@ export function StartWorkout() {
             );
             const preview = day.exercises
               .slice(0, 3)
-              .map((pe) => libIndex.get(pe.exerciseId)?.name ?? 'Exercise')
+              .map((pe) => {
+                const ex = libIndex.get(pe.exerciseId);
+                return ex ? tExercise(ex) : PT_BR.start.fallbackExercise;
+              })
               .join(' • ');
             const isCreating = creatingDayId === day.id;
 
@@ -170,8 +174,8 @@ export function StartWorkout() {
                         {day.name}
                       </h3>
                       <p className="text-xs font-label text-on-surface-variant">
-                        {count} {count === 1 ? 'exercise' : 'exercises'}
-                        {totalSets ? ` • ${totalSets} sets` : ''}
+                        {PT_BR.common.exerciseCount(count)}
+                        {totalSets ? ` • ${PT_BR.common.setCount(totalSets)}` : ''}
                       </p>
                       {preview && (
                         <p className="text-xs text-on-surface-variant/70 truncate">

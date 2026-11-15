@@ -7,12 +7,12 @@ import { collection, getDocs, limit, query, writeBatch, doc } from 'firebase/fir
 import { getFirestoreDb } from './firebase';
 import type { Exercise, MuscleGroup } from '../types';
 
-interface SeedItem {
+export interface SeedItem {
   name: string;
   primaryMuscle: MuscleGroup;
 }
 
-const SEED_EXERCISES: SeedItem[] = [
+export const SEED_EXERCISES: readonly SeedItem[] = [
   // Chest (6)
   { name: 'Bench Press', primaryMuscle: 'chest' },
   { name: 'Incline Dumbbell Press', primaryMuscle: 'chest' },

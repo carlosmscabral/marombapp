@@ -10,6 +10,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useAuth } from '../lib/auth';
 import { useActiveSession } from '../lib/activeSession';
+import { PT_BR } from '../lib/i18n/pt-BR';
 
 /**
  * Merges conditional class names and resolves conflicting Tailwind utilities.
@@ -65,7 +66,7 @@ function AccountMenu() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        aria-label="Account menu"
+        aria-label={PT_BR.auth.accountMenu}
         className="w-9 h-9 rounded-full bg-primary/15 text-primary font-label font-semibold text-xs flex items-center justify-center tracking-wider hover:bg-primary/25 transition-colors"
       >
         {initials}
@@ -88,7 +89,7 @@ function AccountMenu() {
             className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-body text-on-surface hover:bg-surface-container-highest transition-colors"
           >
             <LogOut className="w-4 h-4" />
-            Sign out
+            {PT_BR.auth.signOut}
           </button>
         </div>
       )}
@@ -122,7 +123,7 @@ function ActiveSessionBanner() {
         <span className="absolute inset-0 rounded-full bg-error opacity-75 animate-ping"></span>
         <span className="relative inline-flex w-2 h-2 rounded-full bg-error"></span>
       </span>
-      Active session — tap to resume
+      {PT_BR.nav.activeBanner}
     </Link>
   );
 }
@@ -136,10 +137,10 @@ export function BottomNavBar() {
   const hasActive = Boolean(activeSession);
 
   const navItems = [
-    { path: '/plan', icon: Calendar, label: 'Plan' },
-    { path: '/in-gym', icon: Dumbbell, label: 'In-Gym' },
-    { path: '/library', icon: Library, label: 'Library' },
-    { path: '/analytics', icon: BarChart2, label: 'Analytics' },
+    { path: '/plan', icon: Calendar, label: PT_BR.nav.plan },
+    { path: '/in-gym', icon: Dumbbell, label: PT_BR.nav.inGym },
+    { path: '/library', icon: Library, label: PT_BR.nav.library },
+    { path: '/analytics', icon: BarChart2, label: PT_BR.nav.analytics },
   ];
 
   return (

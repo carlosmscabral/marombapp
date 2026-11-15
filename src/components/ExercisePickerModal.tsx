@@ -1,12 +1,12 @@
 /**
  * Searchable exercise picker modal shared by PlanDay and InGym.
- * Filters the exercise library by text query or primary muscle group chip.
+ * Filters the exercise library by text query or primary muscle group chip and sorts entries in `pt-BR`.
  */
 
 import { useEffect, useMemo, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { MUSCLE_GROUPS, type Exercise, type MuscleGroup } from '../types';
-import { cap } from '../lib/format';
+import { PT_BR, tExercise, tMuscle, tSubMuscle } from '../lib/i18n/pt-BR';
 import { cn } from './Layout';
 
 export interface ExercisePickerModalProps {
@@ -25,7 +25,7 @@ export function ExercisePickerModal({
   existingIds,
   onPick,
   onClose,
-  title = 'Add Exercise',
+  title = PT_BR.picker.defaultTitle,
 }: ExercisePickerModalProps) {
   const [q, setQ] = useState('');
   const [muscle, setMuscle] = useState<'all' | MuscleGroup>('all');
@@ -44,18 +44,29 @@ export function ExercisePickerModal({
     };
   }, [onClose]);
 
+  const sortedLibrary = useMemo(
+    () =>
+      [...library].sort((a, b) =>
+        tExercise(a).localeCompare(tExercise(b), 'pt-BR'),
+      ),
+    [library],
+  );
+
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return library.filter((e) => {
+    return sortedLibrary.filter((e) => {
       if (muscle !== 'all' && e.primaryMuscle !== muscle) return false;
       if (!needle) return true;
       return (
+        tExercise(e).toLowerCase().includes(needle) ||
+        tMuscle(e.primaryMuscle).toLowerCase().includes(needle) ||
+        tSubMuscle(e.subMuscle).toLowerCase().includes(needle) ||
         e.name.toLowerCase().includes(needle) ||
         e.primaryMuscle.toLowerCase().includes(needle) ||
         (e.subMuscle?.toLowerCase().includes(needle) ?? false)
       );
     });
-  }, [library, q, muscle]);
+  }, [sortedLibrary, q, muscle]);
 
   return (
     <div
@@ -74,7 +85,7 @@ export function ExercisePickerModal({
             type="button"
             onClick={onClose}
             className="w-8 h-8 rounded-md flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors"
-            aria-label="Close"
+            aria-label={PT_BR.common.close}
           >
             <X className="w-5 h-5" />
           </button>
@@ -87,7 +98,7 @@ export function ExercisePickerModal({
               autoFocus
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search exercises or muscles…"
+              placeholder={PT_BR.picker.searchPlaceholder}
               className="flex-1 bg-transparent text-sm outline-none text-on-surface placeholder:text-on-surface-variant"
             />
           </div>
@@ -103,7 +114,7 @@ export function ExercisePickerModal({
                   : 'bg-surface-container-high border-transparent text-on-surface-variant',
               )}
             >
-              All
+              {PT_BR.common.all}
             </button>
             {MUSCLE_GROUPS.map((m) => (
               <button
@@ -117,7 +128,7 @@ export function ExercisePickerModal({
                     : 'bg-surface-container-high border-transparent text-on-surface-variant',
                 )}
               >
-                {cap(m)}
+                {tMuscle(m)}
               </button>
             ))}
           </div>
@@ -126,7 +137,7 @@ export function ExercisePickerModal({
         <div className="flex-1 overflow-y-auto divide-y divide-outline-variant/10">
           {filtered.length === 0 && (
             <p className="p-6 text-center text-on-surface-variant text-sm">
-              No matching exercises.
+              {PT_BR.picker.noMatches}
             </p>
           )}
           {filtered.map((ex) => {
@@ -140,16 +151,16 @@ export function ExercisePickerModal({
               >
                 <div className="min-w-0">
                   <div className="font-headline text-sm font-medium text-on-surface truncate">
-                    {ex.name}
+                    {tExercise(ex)}
                   </div>
-                  <div className="text-xs text-on-surface-variant capitalize">
-                    {ex.primaryMuscle}
-                    {ex.subMuscle ? ` · ${ex.subMuscle}` : ''}
+                  <div className="text-xs text-on-surface-variant">
+                    {tMuscle(ex.primaryMuscle)}
+                    {ex.subMuscle ? ` · ${tSubMuscle(ex.subMuscle)}` : ''}
                   </div>
                 </div>
                 {added && (
                   <span className="text-[10px] font-label uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                    Added
+                    {PT_BR.picker.added}
                   </span>
                 )}
               </button>

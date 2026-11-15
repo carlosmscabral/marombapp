@@ -1,13 +1,13 @@
 /**
  * Exercise encyclopedia screen (`/library`).
- * Searches and filters seeded and custom exercises and delegates detail/form sheets.
+ * Searches, filters, and sorts seeded and custom exercises in `pt-BR` and delegates detail/form sheets.
  */
 
 import { useEffect, useMemo, useState } from 'react';
 import { Dumbbell as DumbbellIcon, Plus, Search } from 'lucide-react';
 import { cn } from '../components/Layout';
 import { subscribeLibrary } from '../lib/db';
-import { cap } from '../lib/format';
+import { PT_BR, tExercise, tMuscle, tSubMuscle } from '../lib/i18n/pt-BR';
 import { MUSCLE_GROUPS, type Exercise, type MuscleGroup } from '../types';
 import { ExerciseDetailSheet } from './library/ExerciseDetailSheet';
 import { ExerciseFormSheet } from './library/ExerciseFormSheet';
@@ -37,18 +37,29 @@ export function Library() {
     [exercises, detailId],
   );
 
+  const sortedExercises = useMemo(
+    () =>
+      [...exercises].sort((a, b) =>
+        tExercise(a).localeCompare(tExercise(b), 'pt-BR'),
+      ),
+    [exercises],
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return exercises.filter((ex) => {
+    return sortedExercises.filter((ex) => {
       if (muscle !== 'all' && ex.primaryMuscle !== muscle) return false;
       if (!q) return true;
       return (
+        tExercise(ex).toLowerCase().includes(q) ||
+        tMuscle(ex.primaryMuscle).toLowerCase().includes(q) ||
+        tSubMuscle(ex.subMuscle).toLowerCase().includes(q) ||
         ex.name.toLowerCase().includes(q) ||
         ex.primaryMuscle.toLowerCase().includes(q) ||
         (ex.subMuscle?.toLowerCase().includes(q) ?? false)
       );
     });
-  }, [exercises, search, muscle]);
+  }, [sortedExercises, search, muscle]);
 
   return (
     <div className="flex-1 pb-24">
@@ -56,13 +67,15 @@ export function Library() {
         <div className="flex items-end justify-between mb-6">
           <div>
             <span className="text-primary font-label text-xs uppercase tracking-[0.3em]">
-              Encyclopedia
+              {PT_BR.library.kicker}
             </span>
-            <h2 className="font-headline text-4xl font-bold mt-1">Library</h2>
+            <h2 className="font-headline text-4xl font-bold mt-1">
+              {PT_BR.library.title}
+            </h2>
             <p className="text-on-surface-variant text-sm mt-1 font-body">
               {loaded
-                ? `${exercises.length} exercise${exercises.length === 1 ? '' : 's'} available`
-                : 'Loading…'}
+                ? PT_BR.library.availableCount(exercises.length)
+                : PT_BR.common.loading}
             </p>
           </div>
           <button
@@ -74,7 +87,7 @@ export function Library() {
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary text-on-primary font-label text-xs uppercase tracking-widest font-semibold hover:bg-primary-dim transition-colors"
           >
             <Plus className="w-4 h-4" />
-            Add
+            {PT_BR.common.add}
           </button>
         </div>
 
@@ -86,7 +99,7 @@ export function Library() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full bg-surface-container-low border-2 border-transparent focus:border-primary focus:outline-none rounded-xl py-3.5 pl-12 pr-4 transition-all text-on-surface placeholder:text-outline/60 font-body"
-            placeholder="Search exercises or muscles…"
+            placeholder={PT_BR.library.searchPlaceholder}
             type="text"
           />
         </div>
@@ -95,14 +108,14 @@ export function Library() {
       <section className="px-4 mb-3">
         <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
           <FilterChip
-            label="All"
+            label={PT_BR.common.all}
             active={muscle === 'all'}
             onClick={() => setMuscle('all')}
           />
           {MUSCLE_GROUPS.map((m) => (
             <FilterChip
               key={m}
-              label={cap(m)}
+              label={tMuscle(m)}
               active={muscle === m}
               onClick={() => setMuscle(m)}
             />
@@ -114,9 +127,11 @@ export function Library() {
         {loaded && filtered.length === 0 ? (
           <div className="bg-surface-container-low rounded-xl border-t-4 border-outline-variant/30 p-8 text-center">
             <DumbbellIcon className="w-10 h-10 mx-auto text-outline mb-3" />
-            <p className="font-headline text-lg text-on-surface">No exercises match</p>
+            <p className="font-headline text-lg text-on-surface">
+              {PT_BR.library.emptyTitle}
+            </p>
             <p className="text-on-surface-variant text-sm mt-1 font-body">
-              Try a different filter or add a custom exercise.
+              {PT_BR.library.emptyBody}
             </p>
           </div>
         ) : (
@@ -187,18 +202,18 @@ function LibraryCard({ ex, onClick }: { ex: Exercise; onClick: () => void }) {
     >
       <div className="flex items-start justify-between gap-2">
         <h4 className="font-headline font-semibold text-on-surface text-sm leading-tight line-clamp-2">
-          {ex.name}
+          {tExercise(ex)}
         </h4>
         {ex.isCustom && (
           <span className="shrink-0 text-[9px] font-label uppercase tracking-widest font-bold px-1.5 py-0.5 rounded bg-tertiary-fixed/20 text-tertiary-fixed">
-            Custom
+            {PT_BR.library.customBadge}
           </span>
         )}
       </div>
       <div className="mt-auto">
         <p className="text-xs text-on-surface-variant font-body">
-          {cap(ex.primaryMuscle)}
-          {ex.subMuscle ? ` · ${ex.subMuscle}` : ''}
+          {tMuscle(ex.primaryMuscle)}
+          {ex.subMuscle ? ` · ${tSubMuscle(ex.subMuscle)}` : ''}
         </p>
       </div>
     </button>

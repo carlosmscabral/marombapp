@@ -5,6 +5,7 @@
 
 import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react';
 import { SignatureBar } from '../../components/Layout';
+import { PT_BR } from '../../lib/i18n/pt-BR';
 import type { PlanDay } from '../../types';
 
 export interface DayRowProps {
@@ -39,7 +40,7 @@ export function DayRow({
             onClick={onMoveUp}
             disabled={isFirst}
             className="w-7 h-7 rounded-md flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            aria-label="Move up"
+            aria-label={PT_BR.plan.moveUp}
           >
             <ArrowUp className="w-4 h-4" />
           </button>
@@ -48,7 +49,7 @@ export function DayRow({
             onClick={onMoveDown}
             disabled={isLast}
             className="w-7 h-7 rounded-md flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            aria-label="Move down"
+            aria-label={PT_BR.plan.moveDown}
           >
             <ArrowDown className="w-4 h-4" />
           </button>
@@ -56,13 +57,13 @@ export function DayRow({
         <button type="button" onClick={onOpen} className="flex-1 text-left min-w-0">
           <h4 className="font-headline text-lg font-semibold truncate">{day.name}</h4>
           <p className="text-on-surface-variant text-xs">
-            {day.exercises.length} {day.exercises.length === 1 ? 'exercise' : 'exercises'}
+            {PT_BR.common.exerciseCount(day.exercises.length)}
           </p>
         </button>
         <button
           type="button"
           onClick={onDelete}
-          aria-label={`Delete ${day.name}`}
+          aria-label={PT_BR.plan.deleteDayAria(day.name)}
           className="w-11 h-11 rounded-lg flex items-center justify-center text-secondary/80 hover:text-secondary hover:bg-secondary/15 transition-colors"
         >
           <Trash2 className="w-4 h-4" />

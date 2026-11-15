@@ -7,6 +7,7 @@ import { createContext } from 'react';
 import { Timer } from 'lucide-react';
 import { cn } from '../../components/Layout';
 import { formatElapsed } from '../../lib/format';
+import { PT_BR } from '../../lib/i18n/pt-BR';
 
 /** Callback invoked when the user completes a set so the rest clock restarts from zero. */
 export const StartRestContext = createContext<() => void>(() => {});
@@ -58,7 +59,7 @@ export function RestBar({ elapsedMs, running }: { elapsedMs: number; running: bo
         )}
       />
       <span className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">
-        Rest
+        {PT_BR.inGym.restLabel}
       </span>
       <span
         className={cn(

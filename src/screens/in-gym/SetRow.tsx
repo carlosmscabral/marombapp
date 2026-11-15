@@ -7,6 +7,7 @@ import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Circle } from 'lucide-react';
 import { cn } from '../../components/Layout';
 import { debounce, logSet } from '../../lib/db';
+import { PT_BR } from '../../lib/i18n/pt-BR';
 import type { SessionSet } from '../../types';
 import { StartRestContext } from './restStorage';
 
@@ -130,7 +131,11 @@ export function SetRow({ sessionId, exerciseIndex, setIndex, set }: SetRowProps)
       <button
         type="button"
         onClick={toggleComplete}
-        aria-label={completed ? 'Mark set incomplete' : 'Mark set complete'}
+        aria-label={
+          completed
+            ? PT_BR.inGym.markSetIncomplete
+            : PT_BR.inGym.markSetComplete
+        }
         className={cn(
           'w-10 h-10 rounded-full flex items-center justify-center transition-colors mx-auto',
           completed

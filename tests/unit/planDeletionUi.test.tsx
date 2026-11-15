@@ -165,7 +165,7 @@ describe('PlanDetailView and PlanListView optimistic delete on hanging network (
     });
 
     const deleteBtn = findButtons(container).find((b) =>
-      b.textContent.includes('Delete plan'),
+      b.textContent.includes('Excluir plano'),
     );
     expect(deleteBtn).toBeDefined();
 
@@ -205,14 +205,14 @@ describe('PlanDetailView and PlanListView optimistic delete on hanging network (
     expect(container.textContent).toContain('Scratch Plan');
 
     const moreBtn = findButtons(container).find(
-      (b) => getReactProps(b)['aria-label'] === 'More',
+      (b) => getReactProps(b)['aria-label'] === 'Mais opções',
     );
     await act(async () => {
       getReactProps(moreBtn!).onClick?.({ stopPropagation: () => undefined });
     });
 
     const deleteMenuBtn = findButtons(container).find(
-      (b) => b.textContent.trim() === 'Delete',
+      (b) => b.textContent.trim() === 'Excluir',
     );
     await act(async () => {
       getReactProps(deleteMenuBtn!).onClick?.({ stopPropagation: () => undefined });

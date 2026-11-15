@@ -12,6 +12,7 @@ import {
   deletePlanDay,
   renamePlanDay,
 } from '../lib/db';
+import { PT_BR, tExercise, tMuscle, tSubMuscle } from '../lib/i18n/pt-BR';
 import type { Exercise, PlanDay as PlanDayT } from '../types';
 import { NotesField, NumberField } from './plan/PlanDayFields';
 import { usePlanDayExercises } from './plan/usePlanDayExercises';
@@ -70,7 +71,7 @@ export function PlanDay({ planId, day, library, onBack }: PlanDayProps) {
 
   const handleDeleteDay = async () => {
     const displayName = name.trim() || day.name;
-    if (!confirm(`Delete training day "${displayName}"?`)) return;
+    if (!confirm(PT_BR.plan.confirmDeleteDay(displayName))) return;
     debouncedRename.cancel();
     cancelExercises();
     await deletePlanDay(planId, day.id).catch(() => {});
@@ -79,7 +80,7 @@ export function PlanDay({ planId, day, library, onBack }: PlanDayProps) {
 
   const handleRemoveExercise = (idx: number, exerciseName: string) => {
     const displayDayName = name.trim() || day.name;
-    if (!confirm(`Remove "${exerciseName}" from "${displayDayName}"?`)) return;
+    if (!confirm(PT_BR.plan.confirmRemoveDayExercise(exerciseName, displayDayName))) return;
     removeExercise(idx);
   };
 
@@ -90,13 +91,13 @@ export function PlanDay({ planId, day, library, onBack }: PlanDayProps) {
           type="button"
           onClick={onBack}
           className="w-11 h-11 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors"
-          aria-label="Back"
+          aria-label={PT_BR.common.back}
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex-1 min-w-0">
           <p className="text-primary font-label text-xs tracking-[0.2em] uppercase">
-            Training Day
+            {PT_BR.plan.trainingDayKicker}
           </p>
           <input
             value={name}
@@ -112,14 +113,14 @@ export function PlanDay({ planId, day, library, onBack }: PlanDayProps) {
               debouncedRename(e.target.value);
             }}
             className="w-full bg-transparent font-headline text-2xl font-bold tracking-tight text-on-surface outline-none focus:bg-surface-container-low rounded-lg px-1 -mx-1"
-            placeholder="Day name"
+            placeholder={PT_BR.plan.dayNamePlaceholder}
           />
         </div>
       </div>
 
       <div className="flex items-center justify-between gap-3">
         <span className="text-on-surface-variant text-sm">
-          {exercises.length} {exercises.length === 1 ? 'exercise' : 'exercises'}
+          {PT_BR.common.exerciseCount(exercises.length)}
         </span>
         <button
           type="button"
@@ -127,7 +128,7 @@ export function PlanDay({ planId, day, library, onBack }: PlanDayProps) {
           className="min-h-11 px-3.5 rounded-xl bg-secondary/15 text-secondary border border-secondary/30 font-label text-xs uppercase tracking-widest font-semibold hover:bg-secondary/25 transition-colors inline-flex items-center gap-1.5"
         >
           <Trash2 className="w-4 h-4" />
-          Delete training day
+          {PT_BR.plan.deleteDayBtn}
         </button>
       </div>
 
@@ -135,13 +136,14 @@ export function PlanDay({ planId, day, library, onBack }: PlanDayProps) {
         {exercises.length === 0 && (
           <div className="bg-surface-container-low rounded-xl p-8 text-center border border-dashed border-outline-variant/30">
             <p className="text-on-surface-variant text-sm">
-              No exercises yet. Add one to start building this day.
+              {PT_BR.plan.emptyDayExercises}
             </p>
           </div>
         )}
 
         {exercises.map((pe, idx) => {
           const libEx = libIndex.get(pe.exerciseId);
+          const displayExName = libEx ? tExercise(libEx) : PT_BR.common.unknownExercise;
           return (
             <div
               key={`${pe.exerciseId}-${idx}`}
@@ -156,7 +158,7 @@ export function PlanDay({ planId, day, library, onBack }: PlanDayProps) {
                       onClick={() => moveExercise(idx, -1)}
                       disabled={idx === 0}
                       className="w-7 h-7 rounded-md flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                      aria-label="Move up"
+                      aria-label={PT_BR.plan.moveUp}
                     >
                       <ArrowUp className="w-4 h-4" />
                     </button>
@@ -165,7 +167,7 @@ export function PlanDay({ planId, day, library, onBack }: PlanDayProps) {
                       onClick={() => moveExercise(idx, 1)}
                       disabled={idx === exercises.length - 1}
                       className="w-7 h-7 rounded-md flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                      aria-label="Move down"
+                      aria-label={PT_BR.plan.moveDown}
                     >
                       <ArrowDown className="w-4 h-4" />
                     </button>
@@ -173,23 +175,21 @@ export function PlanDay({ planId, day, library, onBack }: PlanDayProps) {
 
                   <div className="flex-1 min-w-0">
                     <h4 className="font-headline text-lg font-semibold truncate">
-                      {libEx?.name ?? 'Unknown exercise'}
+                      {displayExName}
                     </h4>
                     {libEx && (
-                      <p className="text-on-surface-variant text-xs capitalize">
-                        {libEx.primaryMuscle}
-                        {libEx.subMuscle ? ` · ${libEx.subMuscle}` : ''}
+                      <p className="text-on-surface-variant text-xs">
+                        {tMuscle(libEx.primaryMuscle)}
+                        {libEx.subMuscle ? ` · ${tSubMuscle(libEx.subMuscle)}` : ''}
                       </p>
                     )}
                   </div>
 
                   <button
                     type="button"
-                    onClick={() =>
-                      handleRemoveExercise(idx, libEx?.name ?? 'Unknown exercise')
-                    }
+                    onClick={() => handleRemoveExercise(idx, displayExName)}
                     className="w-11 h-11 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-secondary hover:bg-surface-container-high transition-colors"
-                    aria-label="Remove exercise"
+                    aria-label={PT_BR.plan.removeExerciseAria}
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -197,21 +197,21 @@ export function PlanDay({ planId, day, library, onBack }: PlanDayProps) {
 
                 <div className="grid grid-cols-3 gap-2">
                   <NumberField
-                    label="Sets"
+                    label={PT_BR.plan.setsLabel}
                     value={pe.targetSets}
                     min={1}
                     onBlur={flushExercises}
                     onChange={(v) => patchExercise(idx, { targetSets: v })}
                   />
                   <NumberField
-                    label="Reps Low"
+                    label={PT_BR.plan.repsLowLabel}
                     value={pe.targetRepsLow}
                     min={1}
                     onBlur={flushExercises}
                     onChange={(v) => patchExercise(idx, { targetRepsLow: v })}
                   />
                   <NumberField
-                    label="Reps High"
+                    label={PT_BR.plan.repsHighLabel}
                     value={pe.targetRepsHigh}
                     min={1}
                     onBlur={flushExercises}
@@ -237,7 +237,7 @@ export function PlanDay({ planId, day, library, onBack }: PlanDayProps) {
           className="flex items-center gap-2 bg-surface-container-highest text-primary font-headline font-medium px-6 py-3 rounded-xl border border-primary/20 hover:bg-surface-bright transition-colors"
         >
           <Plus className="w-5 h-5" />
-          Add Exercise
+          {PT_BR.plan.addExerciseBtn}
         </button>
       </div>
 

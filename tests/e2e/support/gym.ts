@@ -22,7 +22,7 @@ export const card = (page: Page, name: string) =>
   page.locator('section').filter({ has: page.getByRole('heading', { name, exact: true, level: 3 }) });
 
 export const restClock = (page: Page) =>
-  page.locator('div.sticky').filter({ hasText: 'Rest' }).locator('span.tabular-nums');
+  page.locator('div.sticky').filter({ hasText: 'Descanso' }).locator('span.tabular-nums');
 
 export const weights = (page: Page, name: string) => card(page, name).getByPlaceholder('kg');
 export const reps = (page: Page, name: string) => card(page, name).getByPlaceholder('reps');

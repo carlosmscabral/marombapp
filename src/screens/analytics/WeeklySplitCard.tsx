@@ -12,7 +12,22 @@ import {
 } from 'recharts';
 import { BarChart2 } from 'lucide-react';
 import { SignatureBar } from '../../components/Layout';
+import { PT_BR, tMuscle } from '../../lib/i18n/pt-BR';
 import type { MuscleGroup } from '../../types';
+
+export const MUSCLE_COLORS: Record<MuscleGroup, string> = {
+  chest: '#6ab2ff',
+  back: '#ff716c',
+  shoulders: '#ffeb3b',
+  biceps: '#4CAF50',
+  triceps: '#a78bfa',
+  forearms: '#22d3ee',
+  abs: '#f97316',
+  glutes: '#ec4899',
+  quads: '#84cc16',
+  hamstrings: '#eab308',
+  calves: '#06b6d4',
+};
 
 export interface MuscleSplitRow {
   muscle: MuscleGroup;
@@ -34,9 +49,11 @@ export function WeeklySplitCard({ rows, totalSets }: WeeklySplitCardProps) {
       <div className="p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="font-headline text-lg font-semibold">Weekly muscle split</h2>
+            <h2 className="font-headline text-lg font-semibold">
+              {PT_BR.analytics.weeklySplitTitle}
+            </h2>
             <p className="text-xs font-label uppercase tracking-widest text-on-surface-variant mt-0.5">
-              Last 7 days · {totalSets} sets
+              {PT_BR.analytics.last7DaysSets(totalSets)}
             </p>
           </div>
           <BarChart2 className="text-primary w-5 h-5" />
@@ -44,7 +61,7 @@ export function WeeklySplitCard({ rows, totalSets }: WeeklySplitCardProps) {
 
         {rows.length === 0 ? (
           <p className="text-sm font-body text-on-surface-variant py-6 text-center">
-            Complete a few sets this week to see your muscle split.
+            {PT_BR.analytics.weeklySplitEmpty}
           </p>
         ) : (
           <div className="flex flex-col gap-6">
@@ -75,7 +92,10 @@ export function WeeklySplitCard({ rows, totalSets }: WeeklySplitCardProps) {
                       fontFamily: 'Plus Jakarta Sans, sans-serif',
                       fontSize: 12,
                     }}
-                    formatter={(value: number, name: string) => [`${value} sets`, name]}
+                    formatter={(value: number, name: string) => [
+                      PT_BR.common.setCount(value),
+                      tMuscle(name as MuscleGroup),
+                    ]}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -92,12 +112,12 @@ export function WeeklySplitCard({ rows, totalSets }: WeeklySplitCardProps) {
                           className="w-2.5 h-2.5 rounded-full"
                           style={{ backgroundColor: row.color }}
                         />
-                        <span className="capitalize">{row.muscle}</span>
+                        <span>{tMuscle(row.muscle)}</span>
                       </div>
                       <span className="font-headline font-semibold tabular-nums">
                         {row.sets}
                         <span className="text-xs font-label text-on-surface-variant ml-1">
-                          sets
+                          {PT_BR.common.setUnit(row.sets)}
                         </span>
                       </span>
                     </div>

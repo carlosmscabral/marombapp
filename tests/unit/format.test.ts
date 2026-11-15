@@ -1,11 +1,34 @@
 /**
- * Unit tests for the shared date, duration, and label formatters.
- * These formatters drive every timer and history label in the as-is UI.
- * A regression here changes visible text, so the tests pin exact strings.
+ * Unit tests for the shared `pt-BR` date, number, duration, and label formatters (#16, REQ-002).
+ * These formatters drive every timer, volume figure, and history label in the UI.
+ * A regression here changes visible text, so the tests pin exact `pt-BR` strings.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cap, formatDuration, formatElapsed, formatRelative } from '../../src/lib/format';
+import {
+  cap,
+  formatDecimal,
+  formatDuration,
+  formatElapsed,
+  formatNumber,
+  formatRelative,
+} from '../../src/lib/format';
+
+describe('formatNumber and formatDecimal (pt-BR)', () => {
+  it('formats rounded integers with pt-BR dot thousands separators', () => {
+    expect(formatNumber(0)).toBe('0');
+    expect(formatNumber(480)).toBe('480');
+    expect(formatNumber(1600)).toBe('1.600');
+    expect(formatNumber(2200.4)).toBe('2.200');
+    expect(formatNumber(Number.NaN)).toBe('0');
+  });
+
+  it('formats decimal weights with pt-BR comma decimal separator', () => {
+    expect(formatDecimal(100)).toBe('100');
+    expect(formatDecimal(62.5)).toBe('62,5');
+    expect(formatDecimal(67.25)).toBe('67,25');
+  });
+});
 
 describe('formatElapsed', () => {
   it('formats sub-hour counters as mm:ss', () => {
@@ -66,22 +89,25 @@ describe('formatRelative', () => {
     expect(formatRelative(0)).toBe('—');
   });
 
-  it('returns Today for an earlier time on the same calendar day', () => {
-    expect(formatRelative(new Date(2026, 6, 15, 7, 0, 0).getTime())).toBe('Today');
+  it('returns Hoje for an earlier time on the same calendar day', () => {
+    expect(formatRelative(new Date(2026, 6, 15, 7, 0, 0).getTime())).toBe('Hoje');
   });
 
-  it('returns Yesterday for a time less than two days ago on another day', () => {
-    expect(formatRelative(new Date(2026, 6, 14, 20, 0, 0).getTime())).toBe('Yesterday');
+  it('returns Ontem for a time less than two days ago on another day', () => {
+    expect(formatRelative(new Date(2026, 6, 14, 20, 0, 0).getTime())).toBe('Ontem');
   });
 
-  it('returns N days ago for two to six full days', () => {
-    expect(formatRelative(NOW - 3 * 86_400_000)).toBe('3 days ago');
-    expect(formatRelative(NOW - 6 * 86_400_000)).toBe('6 days ago');
+  it('returns há N dias for two to six full days', () => {
+    expect(formatRelative(NOW - 3 * 86_400_000)).toBe('há 3 dias');
+    expect(formatRelative(NOW - 6 * 86_400_000)).toBe('há 6 dias');
   });
 
-  it('falls back to a short calendar label at seven days or more', () => {
+  it('falls back to a short pt-BR calendar label at seven days or more', () => {
     const ts = NOW - 10 * 86_400_000;
-    const expected = new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const expected = new Intl.DateTimeFormat('pt-BR', {
+      day: 'numeric',
+      month: 'short',
+    }).format(new Date(ts));
     expect(formatRelative(ts)).toBe(expected);
   });
 });

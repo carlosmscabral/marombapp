@@ -189,7 +189,7 @@ describe('AuthProvider and SignIn resilience', () => {
     expect(capturedAuth?.user).toBeNull();
     expect(capturedAuth?.error).toBe('Firebase: Error (auth/invalid-api-key).');
     expect(container.textContent).toContain('MarombApp');
-    expect(container.textContent).toContain('Sign in with Google');
+    expect(container.textContent).toContain('Entrar com Google');
     expect(container.textContent).toContain('Firebase: Error (auth/invalid-api-key).');
 
     await act(async () => {
@@ -219,7 +219,9 @@ describe('AuthProvider and SignIn resilience', () => {
     expect(capturedAuth?.loading).toBe(false);
     expect(capturedAuth?.user).toBeNull();
     expect(capturedAuth?.error).toBe('unauthorized');
-    expect(container.textContent).toContain('This account is not authorized for MarombApp.');
+    expect(container.textContent).toContain(
+      'Esta conta não está autorizada no MarombApp.',
+    );
 
     mocks.signInWithPopup.mockResolvedValueOnce({ user: { uid: 'some-user' } });
     await act(async () => {

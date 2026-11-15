@@ -20,7 +20,8 @@ export default defineConfig(() => {
         manifest: {
           name: 'MarombApp',
           short_name: 'Maromba',
-          description: 'Single-user gym tracker',
+          description: 'Diário pessoal de musculação',
+          lang: 'pt-BR',
           theme_color: '#000e26',
           background_color: '#000e26',
           display: 'standalone',

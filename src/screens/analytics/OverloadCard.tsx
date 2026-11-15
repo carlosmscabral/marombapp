@@ -14,6 +14,8 @@ import {
   YAxis,
 } from 'recharts';
 import { TrendingUp } from 'lucide-react';
+import { formatDecimal, formatNumber } from '../../lib/format';
+import { PT_BR, tExercise } from '../../lib/i18n/pt-BR';
 import type { Exercise } from '../../types';
 
 const PRIMARY = '#6ab2ff';
@@ -49,9 +51,11 @@ export function OverloadCard({
       <div className="p-5 space-y-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className="font-headline text-lg font-semibold">Progressive overload</h2>
+            <h2 className="font-headline text-lg font-semibold">
+              {PT_BR.analytics.overloadTitle}
+            </h2>
             <p className="text-xs font-label uppercase tracking-widest text-on-surface-variant mt-0.5">
-              Top set & total volume over time
+              {PT_BR.analytics.overloadSubtitle}
             </p>
           </div>
           <TrendingUp className="text-tertiary-fixed w-5 h-5" />
@@ -59,12 +63,12 @@ export function OverloadCard({
 
         {exercises.length === 0 ? (
           <p className="text-sm font-body text-on-surface-variant py-6 text-center">
-            Log some completed sets to start tracking progress per exercise.
+            {PT_BR.analytics.overloadEmptyExercises}
           </p>
         ) : (
           <>
             <label className="block">
-              <span className="sr-only">Pick exercise</span>
+              <span className="sr-only">{PT_BR.analytics.pickExerciseSrOnly}</span>
               <select
                 value={selectedExerciseId}
                 onChange={(e) => onSelectExercise(e.target.value)}
@@ -72,7 +76,7 @@ export function OverloadCard({
               >
                 {exercises.map((e) => (
                   <option key={e.id} value={e.id}>
-                    {e.name}
+                    {tExercise(e)}
                   </option>
                 ))}
               </select>
@@ -80,20 +84,20 @@ export function OverloadCard({
 
             {data.length === 0 ? (
               <p className="text-sm font-body text-on-surface-variant py-6 text-center">
-                No completed sets recorded for this exercise yet.
+                {PT_BR.analytics.overloadEmptyData}
               </p>
             ) : data.length === 1 ? (
               <div className="bg-surface-container rounded-lg p-4 text-sm font-body text-on-surface-variant">
                 <p>
-                  One session logged so far ({data[0].date}). Top weight{' '}
+                  {PT_BR.analytics.oneSessionPrefix(data[0].date)}
                   <span className="text-on-surface font-headline font-semibold">
-                    {data[0].topWeight} kg
+                    {formatDecimal(data[0].topWeight)} kg
                   </span>
-                  , volume{' '}
+                  {PT_BR.analytics.oneSessionMid}
                   <span className="text-on-surface font-headline font-semibold">
-                    {Math.round(data[0].volume).toLocaleString()} kg
+                    {formatNumber(data[0].volume)} kg
                   </span>
-                  . Log another to see a trend.
+                  {PT_BR.analytics.oneSessionSuffix}
                 </p>
               </div>
             ) : (
@@ -138,9 +142,11 @@ export function OverloadCard({
                         fontSize: 12,
                       }}
                       formatter={(value: number, name: string) => {
-                        if (name === 'Top weight') return [`${value} kg`, name];
-                        if (name === 'Volume') {
-                          return [`${Math.round(value).toLocaleString()} kg`, name];
+                        if (name === PT_BR.analytics.topWeightLegend) {
+                          return [`${formatDecimal(value)} kg`, name];
+                        }
+                        if (name === PT_BR.analytics.volumeLegend) {
+                          return [`${formatNumber(value)} kg`, name];
                         }
                         return [value, name];
                       }}
@@ -156,7 +162,7 @@ export function OverloadCard({
                       yAxisId="left"
                       type="monotone"
                       dataKey="topWeight"
-                      name="Top weight"
+                      name={PT_BR.analytics.topWeightLegend}
                       stroke={PRIMARY}
                       strokeWidth={2}
                       dot={{ fill: PRIMARY, r: 3 }}
@@ -166,7 +172,7 @@ export function OverloadCard({
                       yAxisId="right"
                       type="monotone"
                       dataKey="volume"
-                      name="Volume"
+                      name={PT_BR.analytics.volumeLegend}
                       stroke={TERTIARY}
                       strokeWidth={2}
                       dot={{ fill: TERTIARY, r: 3 }}

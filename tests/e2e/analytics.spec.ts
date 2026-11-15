@@ -1,7 +1,7 @@
 /**
- * Parity spec for Analytics and SessionDetail (REQ-001).
- * Analytics loads as a lazy route and shows weekly totals, the muscle split pie, recent sessions,
- * and the progressive-overload line chart. A recent session opens its read-only detail view.
+ * Parity spec for Analytics and SessionDetail in PT-BR (REQ-001, #16).
+ * Analytics loads as a lazy route and shows pt-BR formatted weekly totals, muscle split pie,
+ * recent sessions, and progressive-overload line chart. Recent sessions open SessionDetail.
  */
 
 import { expect, test } from '@playwright/test';
@@ -26,74 +26,74 @@ function historyDocs(): Docs {
 
 test('an empty history shows every empty state', async ({ page }) => {
   await boot(page, { signedIn: true, docs: libraryDocs(), path: '/analytics' });
-  await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible();
-  await expect(page.getByText('sessions this week')).toBeVisible();
-  await expect(page.getByText('Complete a few sets this week to see your muscle split.')).toBeVisible();
-  await expect(page.getByText('No completed sessions yet. Finish a workout to see it here.')).toBeVisible();
-  await expect(page.getByText('Log some completed sets to start tracking progress per exercise.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Análises' })).toBeVisible();
+  await expect(page.getByText('treinos nesta semana')).toBeVisible();
+  await expect(page.getByText('Conclua algumas séries nesta semana para ver sua divisão muscular.')).toBeVisible();
+  await expect(page.getByText('Nenhum treino concluído ainda. Finalize um treino para vê-lo aqui.')).toBeVisible();
+  await expect(page.getByText('Registre séries concluídas para acompanhar a evolução por exercício.')).toBeVisible();
 });
 
-test('weekly totals, muscle split, recent sessions, and overload chart render from history', async ({ page }) => {
+test('weekly totals, muscle split, recent sessions, and overload chart render in pt-BR from history', async ({ page }) => {
   await boot(page, { signedIn: true, docs: historyDocs(), path: '/analytics' });
-  const header = page.locator('header').filter({ hasText: 'sessions this week' });
-  await expect(header).toContainText('2sessions this week');
-  await expect(header).toContainText(`${(2200).toLocaleString('en-US')}kg volume`);
+  const header = page.locator('header').filter({ hasText: 'treinos nesta semana' });
+  await expect(header).toContainText('2treinos nesta semana');
+  await expect(header).toContainText('2.200kg de volume');
 
-  const split = page.locator('section').filter({ hasText: 'Weekly muscle split' });
-  await expect(split).toContainText('Last 7 days · 5 sets');
+  const split = page.locator('section').filter({ hasText: 'Divisão muscular da semana' });
+  await expect(split).toContainText('Últimos 7 dias · 5 séries');
   await expect(split.locator('.recharts-pie-sector')).toHaveCount(3);
-  await expect(split.locator('li')).toHaveText([/chest\s*2\s*sets/, /quads\s*2\s*sets/, /biceps\s*1\s*sets/]);
+  await expect(split.locator('li')).toHaveText([/Peito\s*2\s*séries/, /Quadríceps\s*2\s*séries/, /Bíceps\s*1\s*série/]);
 
-  const recent = page.locator('section').filter({ hasText: 'Recent sessions' });
-  await expect(recent).toContainText('Last 3');
+  const recent = page.locator('section').filter({ hasText: 'Treinos recentes' });
+  await expect(recent).toContainText('Últimos 3');
   await expect(recent.locator('li h3')).toHaveText(['Legs', 'Push', 'Old Push']);
-  await expect(recent.locator('li').first()).toContainText('Yesterday');
-  await expect(recent.locator('li').first()).toContainText('50m · 1,600 kg · 3 sets · 2 exercises');
+  await expect(recent.locator('li').first()).toContainText('Ontem');
+  await expect(recent.locator('li').first()).toContainText('50m · 1.600 kg · 3 séries · 2 exercícios');
   await expect(recent).not.toContainText('Abandoned Day');
 
-  const overload = page.locator('section').filter({ hasText: 'Progressive overload' });
+  const overload = page.locator('section').filter({ hasText: 'Sobrecarga progressiva' });
   const picker = overload.getByRole('combobox');
-  await expect(picker.locator('option')).toHaveText(['Back Squat', 'Barbell Curl', 'Bench Press']);
+  await expect(picker.locator('option')).toHaveText(['Agachamento Livre', 'Rosca Direta', 'Supino Reto']);
   await expect(picker).toHaveValue('ex-squat');
-  await expect(overload).toContainText('One session logged so far');
+  await expect(overload).toContainText('Um treino registrado até agora');
   await expect(overload).toContainText('100 kg');
 
   await picker.selectOption('ex-bench');
   await expect(overload.locator('.recharts-line')).toHaveCount(2);
   await expect(overload.locator('.recharts-line-dots').first().locator('circle')).toHaveCount(3);
-  await expect(overload.locator('.recharts-legend-item-text')).toHaveText(['Top weight', 'Volume']);
+  await expect(overload.locator('.recharts-legend-item-text')).toHaveText(['Maior carga', 'Volume']);
 });
 
 test('a recent session opens its detail and the back link returns to analytics', async ({ page }) => {
   await boot(page, { signedIn: true, docs: historyDocs(), path: '/analytics' });
   await page.locator('li').filter({ hasText: 'Legs' }).getByRole('button').click();
   await expect(page).toHaveURL(/\/sessions\/w1$/);
-  await expect(page.getByText('Completed session')).toBeVisible();
+  await expect(page.getByText('Treino concluído')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Legs', level: 1 })).toBeVisible();
   await expect(page.getByText('PPL', { exact: true })).toBeVisible();
   await expect(page.getByText('Deep squats')).toBeVisible();
-  await expect(page.locator('section').filter({ hasText: 'Duration' }).first()).toContainText('50m');
-  await expect(page.locator('section').filter({ hasText: 'Volume' }).first()).toContainText('1,600kg');
-  await expect(page.locator('section').filter({ hasText: 'Sets' }).first()).toContainText('3/ 3');
+  await expect(page.locator('section').filter({ hasText: 'Duração' }).first()).toContainText('50m');
+  await expect(page.locator('section').filter({ hasText: 'Volume' }).first()).toContainText('1.600kg');
+  await expect(page.locator('section').filter({ hasText: 'Séries' }).first()).toContainText('3/ 3');
 
-  const squat = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Back Squat' }) });
-  await expect(squat).toContainText('Exercise 1');
-  await expect(squat).toContainText('1,000 kg');
+  const squat = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Agachamento Livre' }) });
+  await expect(squat).toContainText('Exercício 1');
+  await expect(squat).toContainText('1.000 kg');
 
-  await page.getByRole('link', { name: 'Back' }).click();
-  await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible();
+  await page.getByRole('link', { name: 'Voltar' }).click();
+  await expect(page.getByRole('heading', { name: 'Análises' })).toBeVisible();
 });
 
 test('session detail shows incomplete sets and a not-found state', async ({ page }) => {
   await boot(page, { signedIn: true, docs: historyDocs(), path: '/sessions/w2' });
-  await expect(page.locator('section').filter({ hasText: 'Sets' }).first()).toContainText('2/ 3');
-  const bench = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Bench Press' }) });
+  await expect(page.locator('section').filter({ hasText: 'Séries' }).first()).toContainText('2/ 3');
+  const bench = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Supino Reto' }) });
   await expect(bench).toContainText('400 kg');
   await expect(bench).toContainText('90');
 
   await page.goto('/sessions/missing-id');
-  await expect(page.getByText('Session not found')).toBeVisible();
-  await page.getByRole('link', { name: 'Back to analytics' }).click();
+  await expect(page.getByText('Treino não encontrado')).toBeVisible();
+  await page.getByRole('link', { name: 'Voltar para análises' }).click();
   await expect(page).toHaveURL(/\/analytics$/);
 });
 
@@ -103,9 +103,9 @@ test('the analytics route loads its code-split chunk on demand', async ({ page }
     if (/\/assets\/Analytics-[\w-]+\.js$/.test(r.url())) chunks.push(r.url());
   });
   await boot(page, { signedIn: true, docs: libraryDocs(), path: '/library' });
-  await expect(page.getByText('4 exercises available')).toBeVisible();
+  await expect(page.getByText('4 exercícios disponíveis')).toBeVisible();
   expect(chunks).toHaveLength(0);
-  await page.getByRole('navigation').getByRole('link', { name: 'Analytics' }).click();
-  await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible();
+  await page.getByRole('navigation').getByRole('link', { name: 'Análises' }).click();
+  await expect(page.getByRole('heading', { name: 'Análises' })).toBeVisible();
   expect(chunks).toHaveLength(1);
 });

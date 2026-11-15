@@ -5,6 +5,7 @@
 
 import { type ReactNode, useEffect } from 'react';
 import { X } from 'lucide-react';
+import { PT_BR } from '../lib/i18n/pt-BR';
 import { SignatureBar } from './Layout';
 
 export interface BottomSheetProps {
@@ -38,7 +39,7 @@ export function BottomSheet({ title, onClose, children }: BottomSheetProps) {
     >
       <button
         type="button"
-        aria-label="Close"
+        aria-label={PT_BR.common.close}
         onClick={onClose}
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
       />
@@ -49,7 +50,7 @@ export function BottomSheet({ title, onClose, children }: BottomSheetProps) {
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close dialog"
+            aria-label={PT_BR.common.closeDialog}
             className="p-1.5 rounded-lg hover:bg-surface-container-high text-on-surface-variant"
           >
             <X className="w-5 h-5" />

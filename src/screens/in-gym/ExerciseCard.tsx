@@ -12,8 +12,9 @@ import {
   removeSetFromExercise,
   updateSessionExercise,
 } from '../../lib/db';
-import { formatRelative } from '../../lib/format';
+import { formatDecimal, formatRelative } from '../../lib/format';
 import type { HistoryEntry } from '../../lib/history';
+import { PT_BR, tExerciseName } from '../../lib/i18n/pt-BR';
 import type { SessionExercise } from '../../types';
 import { SET_DEBOUNCE_MS, SetRow } from './SetRow';
 
@@ -21,12 +22,16 @@ function ExerciseHistory({ history }: { history?: HistoryEntry[] }) {
   return (
     <div className="border-t border-outline-variant/10 pt-3 space-y-2">
       <p className="font-label text-[10px] uppercase tracking-[0.2em] text-tertiary-fixed/80">
-        Last sessions
+        {PT_BR.inGym.lastSessionsLabel}
       </p>
       {history === undefined ? (
-        <p className="text-xs text-on-surface-variant/50 font-label">Loading history…</p>
+        <p className="text-xs text-on-surface-variant/50 font-label">
+          {PT_BR.inGym.loadingHistory}
+        </p>
       ) : history.length === 0 ? (
-        <p className="text-xs text-on-surface-variant/50 font-label">No previous data</p>
+        <p className="text-xs text-on-surface-variant/50 font-label">
+          {PT_BR.inGym.noPreviousData}
+        </p>
       ) : (
         <div className="space-y-1.5">
           {history.map((entry, i) => (
@@ -41,7 +46,7 @@ function ExerciseHistory({ history }: { history?: HistoryEntry[] }) {
                       key={sIdx}
                       className="font-headline text-xs font-semibold tabular-nums text-tertiary-fixed bg-surface-container-highest rounded px-1.5 py-0.5"
                     >
-                      {s.weight || '—'}×{s.reps || '—'}
+                      {s.weight ? formatDecimal(s.weight) : '—'}×{s.reps || '—'}
                     </span>
                   ))}
                 </div>
@@ -85,6 +90,8 @@ export function ExerciseCard({ sessionId, exercise, index, history }: ExerciseCa
   );
   useEffect(() => () => writeNotes.flush(), [writeNotes]);
 
+  const displayName = tExerciseName(exercise.exerciseName);
+
   const repsRange =
     exercise.targetRepsLow && exercise.targetRepsHigh
       ? `${exercise.targetRepsLow}–${exercise.targetRepsHigh} reps`
@@ -96,7 +103,7 @@ export function ExerciseCard({ sessionId, exercise, index, history }: ExerciseCa
     const lastIdx = exercise.sets.length - 1;
     if (lastIdx < 1) return;
     const lastSet = exercise.sets[lastIdx];
-    if (lastSet?.completedAt != null && !confirm('Remove the last completed set?')) {
+    if (lastSet?.completedAt != null && !confirm(PT_BR.inGym.confirmRemoveLastSet)) {
       return;
     }
     void removeSetFromExercise(sessionId, index, lastIdx);
@@ -105,8 +112,8 @@ export function ExerciseCard({ sessionId, exercise, index, history }: ExerciseCa
   const handleRemoveExercise = () => {
     const hasCompleted = exercise.sets.some((s) => s.completedAt != null);
     const msg = hasCompleted
-      ? `Remove ${exercise.exerciseName} and its completed sets from this workout?`
-      : `Remove ${exercise.exerciseName} from this workout?`;
+      ? PT_BR.inGym.confirmRemoveExerciseWithSets(displayName)
+      : PT_BR.inGym.confirmRemoveExercise(displayName);
     if (!confirm(msg)) return;
     writeNotes.cancel();
     void removeExerciseFromSession(sessionId, index);
@@ -118,10 +125,10 @@ export function ExerciseCard({ sessionId, exercise, index, history }: ExerciseCa
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <p className="font-label text-[10px] uppercase tracking-[0.2em] text-on-surface-variant/60">
-              Exercise {index + 1}
+              {PT_BR.inGym.exerciseIndex(index + 1)}
             </p>
             <h3 className="font-headline text-xl font-bold truncate">
-              {exercise.exerciseName}
+              {displayName}
             </h3>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
@@ -133,7 +140,7 @@ export function ExerciseCard({ sessionId, exercise, index, history }: ExerciseCa
             <button
               type="button"
               onClick={handleRemoveExercise}
-              aria-label={`Remove ${exercise.exerciseName}`}
+              aria-label={PT_BR.inGym.removeExerciseAria(displayName)}
               className="w-11 h-11 rounded-lg flex items-center justify-center text-on-surface-variant/60 hover:text-secondary hover:bg-surface-container-high transition-colors"
             >
               <X className="w-4 h-4" />
@@ -155,17 +162,17 @@ export function ExerciseCard({ sessionId, exercise, index, history }: ExerciseCa
             writeNotes(e.target.value);
           }}
           rows={2}
-          placeholder="Notes for this exercise…"
+          placeholder={PT_BR.inGym.exerciseNotesPlaceholder}
           className="w-full bg-surface-container rounded-lg px-3 py-2 text-sm font-body outline-none focus:ring-2 focus:ring-primary/40 resize-none placeholder:text-on-surface-variant/50"
         />
 
         <ExerciseHistory history={history} />
 
         <div className="grid grid-cols-[2.5rem_1fr_1fr_3rem] gap-2 px-2 text-[10px] font-label font-black uppercase tracking-widest text-on-surface-variant/60">
-          <div className="text-center">Set</div>
-          <div className="text-center">Kg</div>
-          <div className="text-center">Reps</div>
-          <div className="text-center">Done</div>
+          <div className="text-center">{PT_BR.inGym.colSet}</div>
+          <div className="text-center">{PT_BR.inGym.colKg}</div>
+          <div className="text-center">{PT_BR.inGym.colReps}</div>
+          <div className="text-center">{PT_BR.inGym.colDone}</div>
         </div>
 
         <div className="space-y-2">
@@ -187,13 +194,13 @@ export function ExerciseCard({ sessionId, exercise, index, history }: ExerciseCa
             className="flex-1 min-h-11 py-2 rounded-lg border border-dashed border-outline-variant/40 text-sm font-label font-semibold text-on-surface-variant hover:text-primary hover:border-primary/40 transition-colors flex items-center justify-center gap-2"
           >
             <Plus className="w-4 h-4" />
-            Add set
+            {PT_BR.inGym.addSetBtn}
           </button>
           {exercise.sets.length > 1 && (
             <button
               type="button"
               onClick={handleRemoveLastSet}
-              aria-label="Remove last set"
+              aria-label={PT_BR.inGym.removeLastSetAria}
               className="min-w-11 min-h-11 px-3 py-2 rounded-lg border border-dashed border-outline-variant/30 text-sm font-label font-semibold text-on-surface-variant/70 hover:text-secondary hover:border-secondary/40 transition-colors flex items-center justify-center gap-1"
             >
               <Minus className="w-4 h-4" />

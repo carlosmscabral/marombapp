@@ -73,6 +73,6 @@ export async function expectStore(page: Page, predicate: (docs: Docs) => boolean
 }
 
 /** Clicks a bottom navigation tab by its label. */
-export async function nav(page: Page, label: 'Plan' | 'In-Gym' | 'Library' | 'Analytics'): Promise<void> {
+export async function nav(page: Page, label: 'Planos' | 'Treino' | 'Biblioteca' | 'Análises'): Promise<void> {
   await page.getByRole('navigation').getByRole('link', { name: label }).click();
 }

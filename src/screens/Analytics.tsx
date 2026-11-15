@@ -8,24 +8,16 @@ import { useNavigate } from 'react-router-dom';
 import { Calendar, ChevronRight } from 'lucide-react';
 import { cn } from '../components/Layout';
 import { subscribeLibrary, subscribeRecentSessions } from '../lib/db';
-import { formatDateShort, formatDuration, formatRelative } from '../lib/format';
+import {
+  formatDateShort,
+  formatDuration,
+  formatNumber,
+  formatRelative,
+} from '../lib/format';
+import { PT_BR, tExercise } from '../lib/i18n/pt-BR';
 import { MUSCLE_GROUPS, type Exercise, type MuscleGroup, type Session } from '../types';
 import { OverloadCard, type OverloadPoint } from './analytics/OverloadCard';
-import { WeeklySplitCard } from './analytics/WeeklySplitCard';
-
-const MUSCLE_COLORS: Record<MuscleGroup, string> = {
-  chest: '#6ab2ff',
-  back: '#ff716c',
-  shoulders: '#ffeb3b',
-  biceps: '#4CAF50',
-  triceps: '#a78bfa',
-  forearms: '#22d3ee',
-  abs: '#f97316',
-  glutes: '#ec4899',
-  quads: '#84cc16',
-  hamstrings: '#eab308',
-  calves: '#06b6d4',
-};
+import { MUSCLE_COLORS, WeeklySplitCard } from './analytics/WeeklySplitCard';
 
 function sessionVolume(s: Session): number {
   let total = 0;
@@ -129,7 +121,7 @@ export function Analytics() {
     }
     return library
       .filter((e) => ids.has(e.id))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => tExercise(a).localeCompare(tExercise(b), 'pt-BR'));
   }, [recentSessions, library]);
 
   useEffect(() => {
@@ -174,7 +166,7 @@ export function Analytics() {
   if (loading) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-10 text-on-surface-variant font-label text-sm tracking-widest uppercase">
-        Loading…
+        {PT_BR.common.loading}
       </div>
     );
   }
@@ -182,21 +174,25 @@ export function Analytics() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-6 space-y-8">
       <header className="space-y-2">
-        <h1 className="font-headline text-3xl font-bold tracking-tight">Analytics</h1>
+        <h1 className="font-headline text-3xl font-bold tracking-tight">
+          {PT_BR.analytics.title}
+        </h1>
         <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 text-on-surface-variant">
           <div className="flex items-baseline gap-2">
             <span className="font-headline text-2xl font-semibold text-on-surface">
               {weekSessions.length}
             </span>
             <span className="text-xs font-label uppercase tracking-widest">
-              sessions this week
+              {PT_BR.analytics.sessionsThisWeek}
             </span>
           </div>
           <div className="flex items-baseline gap-2">
             <span className="font-headline text-2xl font-semibold text-on-surface">
-              {Math.round(weekTotalVolume).toLocaleString()}
+              {formatNumber(weekTotalVolume)}
             </span>
-            <span className="text-xs font-label uppercase tracking-widest">kg volume</span>
+            <span className="text-xs font-label uppercase tracking-widest">
+              {PT_BR.analytics.kgVolume}
+            </span>
           </div>
         </div>
       </header>
@@ -205,16 +201,18 @@ export function Analytics() {
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="font-headline text-lg font-semibold">Recent sessions</h2>
+          <h2 className="font-headline text-lg font-semibold">
+            {PT_BR.analytics.recentSessionsTitle}
+          </h2>
           <span className="text-xs font-label uppercase tracking-widest text-on-surface-variant">
-            Last {last10.length}
+            {PT_BR.analytics.lastN(last10.length)}
           </span>
         </div>
 
         {last10.length === 0 ? (
           <div className="bg-surface-container-low rounded-xl border-t-4 border-secondary p-6">
             <p className="text-sm font-body text-on-surface-variant py-6 text-center">
-              No completed sessions yet. Finish a workout to see it here.
+              {PT_BR.analytics.recentEmpty}
             </p>
           </div>
         ) : (
@@ -223,7 +221,7 @@ export function Analytics() {
               const ts = s.finishedAt ?? s.startedAt;
               const duration =
                 s.finishedAt && s.startedAt ? formatDuration(s.finishedAt - s.startedAt) : '—';
-              const volume = Math.round(sessionVolume(s));
+              const volume = sessionVolume(s);
               const setCount = sessionCompletedSetCount(s);
               const exerciseCount = s.exercises.length;
               const accent =
@@ -256,15 +254,16 @@ export function Analytics() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-baseline justify-between gap-3">
                           <h3 className="font-headline font-semibold truncate">
-                            {s.dayName || 'Workout'}
+                            {s.dayName || PT_BR.analytics.fallbackWorkoutName}
                           </h3>
                           <span className="text-xs font-label uppercase tracking-widest text-on-surface-variant shrink-0">
                             {formatRelative(ts)}
                           </span>
                         </div>
                         <p className="text-xs font-label text-on-surface-variant mt-1 truncate">
-                          {duration} · {volume.toLocaleString()} kg · {setCount} sets ·{' '}
-                          {exerciseCount} {exerciseCount === 1 ? 'exercise' : 'exercises'}
+                          {duration} · {formatNumber(volume)} kg ·{' '}
+                          {PT_BR.common.setCount(setCount)} ·{' '}
+                          {PT_BR.common.exerciseCount(exerciseCount)}
                         </p>
                       </div>
                       <ChevronRight className="w-5 h-5 text-outline group-hover:text-primary transition-colors shrink-0" />
