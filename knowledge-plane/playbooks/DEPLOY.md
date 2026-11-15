@@ -1,6 +1,6 @@
 # Cloud Run Deployment Playbook (`marombapp-serving`)
 
-Covers packaging, building, deploying, verifying, and rolling back `marombapp-serving` on Cloud Run and the isolated `marombapp` Firestore Native database in `vibe-cabral` (`us-central1`) per REQ-002, REQ-003, REQ-004, [ADR-001](../adr/ADR-001-unified-cloud-run-bff-static-pwa-serving.md), and [ADR-004](../adr/ADR-004-co-locate-hub-runtime-and-named-db-in-vibe-cabral.md).
+Covers packaging, building, deploying, verifying, and rolling back `marombapp-serving` on Cloud Run and the isolated Firestore Native databases (`marombapp` and `marombapp-test`) in `vibe-cabral` (`us-central1`) per REQ-001, REQ-002, REQ-003, REQ-004, [ADR-001](../adr/ADR-001-unified-cloud-run-bff-static-pwa-serving.md), [ADR-004](../adr/ADR-004-co-locate-hub-runtime-and-named-db-in-vibe-cabral.md), and [ADR-005](../adr/ADR-005-marombapp-db-is-production-marombapp-test-for-tests.md).
 
 ## Service & IAM Topology
 
@@ -10,11 +10,12 @@ Covers packaging, building, deploying, verifying, and rolling back `marombapp-se
 - **Runtime Service Account:** `marombapp-run@vibe-cabral.iam.gserviceaccount.com`
 - **Cloud Build Service Account:** `projects/vibe-cabral/serviceAccounts/vibe-builder@vibe-cabral.iam.gserviceaccount.com` (pass explicitly on every `gcloud builds submit`; default compute SA has no grants)
 - **Deployer Identity:** `marombapp-deployer@vibe-cabral.iam.gserviceaccount.com` (holds `roles/run.developer` + service-scoped `roles/run.admin` on `marombapp-serving`, `roles/cloudbuild.builds.editor`, `roles/artifactregistry.writer`, `roles/datastore.indexAdmin`, `roles/firebaserules.admin`, `roles/firebase.viewer`, and `roles/iam.serviceAccountUser` on `marombapp-run@` and `vibe-builder@`)
-- **Firestore Database & Firebase Config:**
-  - Named Native database `marombapp` (`projects/vibe-cabral/databases/marombapp`).
-  - **HARD RULE ([ADR-004](../adr/ADR-004-co-locate-hub-runtime-and-named-db-in-vibe-cabral.md)):** NEVER deploy rules or indexes to, or write test/evaluation data into, `(default)` (live personal workout history). NEVER run a bare `firebase deploy` (which would hit Firebase Hosting `vibe-cabral.web.app`).
-  - [`firebase.json`](../../firebase.json) uses the array form for `firestore` with `"database": "marombapp"`.
-  - [`.firebaserc`](../../.firebaserc) sets `"default": "vibe-cabral"`. Always pass `--only firestore:marombapp --project vibe-cabral`.
+- **Firestore Databases & Firebase Config ([ADR-004](../adr/ADR-004-co-locate-hub-runtime-and-named-db-in-vibe-cabral.md), [ADR-005](../adr/ADR-005-marombapp-db-is-production-marombapp-test-for-tests.md)):**
+  - **`marombapp` (`projects/vibe-cabral/databases/marombapp`, `us-central1`, Native):** Production data store of `marombapp-serving` holding real PO workout data (`exercises`, `plans` + `days`, `sessions`) migrated from `(default)`. Never write automated test, live-probe, or blind-evaluation fixtures into `marombapp`.
+  - **`marombapp-test` (`projects/vibe-cabral/databases/marombapp-test`, `us-central1`, Native):** Dedicated test and evaluation database receiving all automated test, live-probe, and blind-evaluation writes. Uses the exact same [`firestore.rules`](../../firestore.rules) and [`firestore.indexes.json`](../../firestore.indexes.json) as `marombapp`.
+  - **`(default)` (`projects/vibe-cabral/databases/(default)`):** Legacy database backing `vibe-cabral.web.app` and other personal PO apps. **HARD RULE ([ADR-004](../adr/ADR-004-co-locate-hub-runtime-and-named-db-in-vibe-cabral.md), [ADR-005](../adr/ADR-005-marombapp-db-is-production-marombapp-test-for-tests.md)):** `(default)` is strictly **READ-ONLY** for the factory. NEVER write to, delete from, or deploy rules or indexes to `(default)`. NEVER run a bare `firebase deploy` (which would overwrite Firebase Hosting `vibe-cabral.web.app`) or an unscoped `firebase deploy --only firestore`.
+  - [`firebase.json`](../../firebase.json) declares two `firestore` array targets (`"database": "marombapp"` and `"database": "marombapp-test"`) and keeps the legacy `"hosting"` block untouched.
+  - [`.firebaserc`](../../.firebaserc) sets `"default": "vibe-cabral"`. Always scope Firebase CLI deploys explicitly to a single named database target (`--only firestore:marombapp` or `--only firestore:marombapp-test`) with `--project vibe-cabral`.
 
 ## Step 0: Identity Verification
 
@@ -43,14 +44,21 @@ The active account MUST be `marombapp-deployer@vibe-cabral.iam.gserviceaccount.c
   - `GOOGLE_CLOUD_LOCATION=global`
   - `ALLOWED_UID=iELlq0wRQhR2F5NmrM6pbMSrJuj1`
 
-## Firestore Rules & Composite Indexes (`database: marombapp`)
+## Firestore Rules & Composite Indexes (`marombapp` & `marombapp-test`)
 
-1. **Confirm [`firestore.rules`](../../firestore.rules) single-UID guard (`iELlq0wRQhR2F5NmrM6pbMSrJuj1`) and deploy only `firestore:marombapp`:**
+Per [ADR-005](../adr/ADR-005-marombapp-db-is-production-marombapp-test-for-tests.md), both `marombapp` (production PO data) and `marombapp-test` (automated tests, live probes, and blind evaluations) share [`firestore.rules`](../../firestore.rules) (single-UID guard `iELlq0wRQhR2F5NmrM6pbMSrJuj1`) and [`firestore.indexes.json`](../../firestore.indexes.json) (`sessions`: `status` ASC, `finishedAt` DESC). Deploy each database explicitly with `--only firestore:<database>` — **never** target `(default)` or omit `:database`:
+
+1. **Deploy rules & indexes to production DB `marombapp` (when rules/indexes change for serving):**
    ```bash
    firebase deploy --only firestore:marombapp --project vibe-cabral --non-interactive
    ```
-2. **Verify composite index (`sessions`: `status` ASC, `finishedAt` DESC) and rules release on `marombapp` (and confirm `(default)` is untouched):**
+2. **Deploy rules & indexes to test/eval DB `marombapp-test`:**
    ```bash
+   firebase deploy --only firestore:marombapp-test --project vibe-cabral --non-interactive
+   ```
+3. **Verify composite index (`READY`) and rules release on the target database (`marombapp` or `marombapp-test`), and confirm `(default)` remains untouched:**
+   ```bash
+   # Production DB (marombapp)
    gcloud firestore indexes composite list \
      --project=vibe-cabral \
      --database=marombapp \
@@ -60,6 +68,17 @@ The active account MUST be `marombapp-deployer@vibe-cabral.iam.gserviceaccount.c
    curl -sf \
      -H "Authorization: Bearer $(gcloud auth print-access-token)" \
      "https://firebaserules.googleapis.com/v1/projects/vibe-cabral/releases/cloud.firestore/marombapp"
+
+   # Test/Eval DB (marombapp-test)
+   gcloud firestore indexes composite list \
+     --project=vibe-cabral \
+     --database=marombapp-test \
+     --format=json \
+     --quiet
+
+   curl -sf \
+     -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+     "https://firebaserules.googleapis.com/v1/projects/vibe-cabral/releases/cloud.firestore/marombapp-test"
    ```
 
 ## Step 1: Clean Archive Packaging
@@ -75,7 +94,7 @@ git -C /workspace archive "$sha" | tar -x -C "$d"
 
 ## Step 2: Build Image with Cloud Build (`vibe-builder` SA)
 
-Resolve the `vibe-cabral` Firebase web config from environment variables (or `firebase apps:sdkconfig web 1:280799742875:web:e47e00f1afcdab5e92af3e --project vibe-cabral --json`), write a temporary Cloud Build config outside `$d` under `/tmp`, and submit the clean archive directory `$d`:
+Resolve the `vibe-cabral` Firebase web config from environment variables (or `firebase apps:sdkconfig web 1:280799742875:web:e47e00f1afcdab5e92af3e --project vibe-cabral --json`), write a temporary Cloud Build config under `/tmp` (never inside `$d` or `/workspace`), and submit the clean archive directory `$d`:
 
 ```bash
 IMAGE="us-central1-docker.pkg.dev/vibe-cabral/marombapp/marombapp-serving:${sha}"
