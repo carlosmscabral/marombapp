@@ -31,6 +31,7 @@ These files existed in the repository before the factory started. They stay wher
 | [ADR-002](adr/ADR-002-named-firestore-database-isolation-marombapp-in-hub-project.md) | Named Firestore Database Isolation (`marombapp`) in Hub Project | Superseded by ADR-004 | REQ-002, REQ-004 |
 | [ADR-003](adr/ADR-003-re-infrastructure-first-wave-scoping.md) | Re-Infrastructure First Wave Scoping | Accepted | REQ-001, REQ-002, REQ-005, REQ-006 |
 | [ADR-004](adr/ADR-004-co-locate-hub-runtime-and-named-db-in-vibe-cabral.md) | Co-locate Scion Hub, Cloud Run and Named Firestore DB `marombapp` in `vibe-cabral` | Accepted | REQ-002, REQ-003, REQ-004 |
+| [ADR-005](adr/ADR-005-marombapp-db-is-production-marombapp-test-for-tests.md) | DB `marombapp` Holds Real PO Data; DB `marombapp-test` Isolates Tests and Evaluation | Accepted | REQ-001, REQ-002, REQ-004 |
 
 ## Keep this knowledge plane healthy
 
