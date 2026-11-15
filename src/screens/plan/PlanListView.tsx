@@ -1,6 +1,6 @@
 /**
  * Training plan list view (`PlanListView`).
- * Creates plans, toggles the active plan, renames plans inline, and archives unused plans.
+ * Creates plans, toggles the active plan, renames plans inline, archives plans, and deletes plans optimistically.
  */
 
 import { useEffect, useState } from 'react';
@@ -10,6 +10,7 @@ import {
   archivePlan,
   createPlan,
   deletePlan,
+  isPlanPendingDelete,
   renamePlan,
   setActivePlan,
   subscribePlanDays,
@@ -25,7 +26,10 @@ export interface PlanListViewProps {
  * Renders the list of non-archived training plans and the inline creation row.
  */
 export function PlanListView({ plans, onOpen }: PlanListViewProps) {
-  const visiblePlans = plans.filter((p) => p.archivedAt == null);
+  const [deletedIds, setDeletedIds] = useState<ReadonlySet<string>>(() => new Set());
+  const visiblePlans = plans.filter(
+    (p) => p.archivedAt == null && !deletedIds.has(p.id) && !isPlanPendingDelete(p.id),
+  );
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
 
@@ -117,21 +121,35 @@ export function PlanListView({ plans, onOpen }: PlanListViewProps) {
 
       <div className="space-y-3">
         {visiblePlans.map((plan) => (
-          <PlanRow key={plan.id} plan={plan} onOpen={() => onOpen(plan.id)} />
+          <PlanRow
+            key={plan.id}
+            plan={plan}
+            onOpen={() => onOpen(plan.id)}
+            onDeleted={() => setDeletedIds((prev) => new Set(prev).add(plan.id))}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function PlanRow({ plan, onOpen }: { plan: Plan; onOpen: () => void }) {
-  const [dayCount, setDayCount] = useState<number | null>(null);
+function PlanRow({
+  plan,
+  onOpen,
+  onDeleted,
+}: {
+  plan: Plan;
+  onOpen: () => void;
+  onDeleted: () => void;
+}) {
+  const [dayIds, setDayIds] = useState<string[] | null>(null);
+  const dayCount = dayIds?.length ?? null;
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(plan.name);
 
   useEffect(() => {
-    return subscribePlanDays(plan.id, (days) => setDayCount(days.length));
+    return subscribePlanDays(plan.id, (days) => setDayIds(days.map((d) => d.id)));
   }, [plan.id]);
 
   const submitRename = async () => {
@@ -235,12 +253,13 @@ function PlanRow({ plan, onOpen }: { plan: Plan; onOpen: () => void }) {
                 <MenuItem
                   label="Delete"
                   variant="danger"
-                  onClick={async () => {
+                  onClick={() => {
                     setMenuOpen(false);
                     if (!confirm(`Delete plan "${plan.name}"? This cannot be undone.`)) {
                       return;
                     }
-                    await deletePlan(plan.id).catch(() => {});
+                    onDeleted();
+                    void deletePlan(plan.id, dayIds ?? []).catch(() => {});
                   }}
                 />
               </div>

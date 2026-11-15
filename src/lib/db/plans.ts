@@ -29,6 +29,15 @@ const daysCol = (planId: string) => collection(getFirestoreDb(), 'plans', planId
 const dayDoc = (planId: string, dayId: string) =>
   doc(getFirestoreDb(), 'plans', planId, 'days', dayId);
 
+const pendingDeletedPlans = new Set<string>();
+
+/**
+ * Reports whether `planId` has an in-flight local deletion so optimistic views can hide it immediately.
+ */
+export function isPlanPendingDelete(planId: string): boolean {
+  return pendingDeletedPlans.has(planId);
+}
+
 /**
  * Normalizes a Firestore plan document into a `Plan` object.
  * Handles both numeric timestamps and pending `serverTimestamp()` objects.
@@ -58,6 +67,7 @@ export function subscribeActivePlan(cb: (plan: Plan | null) => void): Unsubscrib
   return onSnapshot(q, (snap) => {
     if (snap.empty) return cb(null);
     const d = snap.docs[0];
+    if (pendingDeletedPlans.has(d.id)) return cb(null);
     cb(planFromDoc(d.id, d.data()));
   });
 }
@@ -67,7 +77,13 @@ export function subscribeActivePlan(cb: (plan: Plan | null) => void): Unsubscrib
  */
 export function subscribeAllPlans(cb: (plans: Plan[]) => void): Unsubscribe {
   return onSnapshot(plansCol(), (snap) => {
-    const items = snap.docs.map((d) => planFromDoc(d.id, d.data()));
+    const present = new Set(snap.docs.map((d) => d.id));
+    for (const id of pendingDeletedPlans) {
+      if (!present.has(id)) pendingDeletedPlans.delete(id);
+    }
+    const items = snap.docs
+      .filter((d) => !pendingDeletedPlans.has(d.id))
+      .map((d) => planFromDoc(d.id, d.data()));
     items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     cb(items);
   });
@@ -150,18 +166,33 @@ export async function archivePlan(planId: string): Promise<void> {
 
 /**
  * Permanently deletes `planId` and every document in its `days` subcollection in one batch.
- * Falls back to cached day documents and avoids awaiting server ack so offline deletion stays responsive.
+ * Merges caller-known `knownDayIds` with cache-only `getDocsFromCache` (never blocking on network `getDocs`)
+ * and starts `batch.commit()` without awaiting server acknowledgment so poor-signal deletion never stalls.
  */
-export async function deletePlan(planId: string): Promise<void> {
-  const db = getFirestoreDb();
-  const col = daysCol(planId);
-  const daysSnap = await getDocs(col).catch(() => getDocsFromCache(col));
-  const batch = writeBatch(db);
-  daysSnap.forEach((d) => {
-    batch.delete(d.ref);
-  });
-  batch.delete(planDoc(planId));
-  void batch.commit().catch(() => {});
+export async function deletePlan(
+  planId: string,
+  knownDayIds: readonly string[] = [],
+): Promise<void> {
+  pendingDeletedPlans.add(planId);
+  try {
+    const db = getFirestoreDb();
+    const ids = new Set<string>(knownDayIds);
+    const cachedSnap = await getDocsFromCache(daysCol(planId)).catch(() => null);
+    cachedSnap?.forEach((d) => {
+      ids.add(d.id);
+    });
+    const batch = writeBatch(db);
+    for (const dayId of ids) {
+      batch.delete(dayDoc(planId, dayId));
+    }
+    batch.delete(planDoc(planId));
+    void batch.commit().catch(() => {
+      pendingDeletedPlans.delete(planId);
+    });
+  } catch (err) {
+    pendingDeletedPlans.delete(planId);
+    throw err;
+  }
 }
 
 /**

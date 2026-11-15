@@ -41,12 +41,16 @@ export function PlanDetailView({
 }: PlanDetailViewProps) {
   const navigate = useNavigate();
   const [days, setDays] = useState<PlanDayT[]>([]);
+  const [deletedDayIds, setDeletedDayIds] = useState<ReadonlySet<string>>(() => new Set());
   const [name, setName] = useState(plan.name);
   const nameFocusedRef = useRef(false);
   const [addingDay, setAddingDay] = useState(false);
   const [newDayName, setNewDayName] = useState('');
 
-  useEffect(() => subscribePlanDays(plan.id, setDays), [plan.id]);
+  useEffect(() => {
+    setDeletedDayIds(new Set());
+    return subscribePlanDays(plan.id, setDays);
+  }, [plan.id]);
 
   useEffect(() => {
     if (!nameFocusedRef.current) setName(plan.name);
@@ -63,7 +67,8 @@ export function PlanDetailView({
   );
   useEffect(() => () => debouncedRename.flush(), [debouncedRename]);
 
-  const selectedDay = days.find((d) => d.id === selectedDayId) ?? null;
+  const visibleDays = days.filter((d) => !deletedDayIds.has(d.id));
+  const selectedDay = visibleDays.find((d) => d.id === selectedDayId) ?? null;
   if (selectedDay) {
     return (
       <PlanDay
@@ -77,22 +82,26 @@ export function PlanDetailView({
 
   const moveDay = async (idx: number, dir: -1 | 1) => {
     const target = idx + dir;
-    if (target < 0 || target >= days.length) return;
-    const orderedIds = days.map((d) => d.id);
+    if (target < 0 || target >= visibleDays.length) return;
+    const orderedIds = visibleDays.map((d) => d.id);
     [orderedIds[idx], orderedIds[target]] = [orderedIds[target], orderedIds[idx]];
     await reorderPlanDays(plan.id, orderedIds).catch(() => {});
   };
 
-  const handleDeleteDay = async (day: PlanDayT) => {
+  const handleDeleteDay = (day: PlanDayT) => {
     if (!confirm(`Delete training day "${day.name}"?`)) return;
-    await deletePlanDay(plan.id, day.id).catch(() => {});
+    setDeletedDayIds((prev) => new Set(prev).add(day.id));
+    void deletePlanDay(plan.id, day.id).catch(() => {});
   };
 
-  const handleDeletePlan = async () => {
+  const handleDeletePlan = () => {
     const displayName = name.trim() || plan.name;
     if (!confirm(`Delete plan "${displayName}"? This cannot be undone.`)) return;
     debouncedRename.cancel();
-    await deletePlan(plan.id).catch(() => {});
+    void deletePlan(
+      plan.id,
+      days.map((d) => d.id),
+    ).catch(() => {});
     onBack();
   };
 
@@ -173,7 +182,7 @@ export function PlanDetailView({
 
         <button
           type="button"
-          onClick={() => void handleDeletePlan()}
+          onClick={handleDeletePlan}
           className="shrink-0 min-h-11 px-3.5 rounded-xl bg-secondary/15 text-secondary border border-secondary/30 font-label text-xs uppercase tracking-widest font-semibold hover:bg-secondary/25 transition-colors inline-flex items-center gap-1.5"
         >
           <Trash2 className="w-4 h-4" />
@@ -185,11 +194,11 @@ export function PlanDetailView({
         <div className="flex items-center justify-between">
           <h3 className="font-headline text-lg font-semibold">Training Days</h3>
           <span className="text-on-surface-variant text-xs">
-            {days.length} {days.length === 1 ? 'day' : 'days'}
+            {visibleDays.length} {visibleDays.length === 1 ? 'day' : 'days'}
           </span>
         </div>
 
-        {days.length === 0 && !addingDay && (
+        {visibleDays.length === 0 && !addingDay && (
           <div className="bg-surface-container-low rounded-xl p-6 text-center border border-dashed border-outline-variant/30">
             <p className="text-on-surface-variant text-sm">
               No training days yet. Add one to get started.
@@ -197,15 +206,15 @@ export function PlanDetailView({
           </div>
         )}
 
-        {days.map((d, idx) => (
+        {visibleDays.map((d, idx) => (
           <DayRow
             key={d.id}
             day={d}
             isFirst={idx === 0}
-            isLast={idx === days.length - 1}
+            isLast={idx === visibleDays.length - 1}
             onMoveUp={() => void moveDay(idx, -1)}
             onMoveDown={() => void moveDay(idx, 1)}
-            onDelete={() => void handleDeleteDay(d)}
+            onDelete={() => handleDeleteDay(d)}
             onOpen={() => onSelectDay(d.id)}
           />
         ))}
@@ -250,7 +259,7 @@ export function PlanDetailView({
         )}
       </section>
 
-      {plan.active && days.length > 0 && (
+      {plan.active && visibleDays.length > 0 && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40">
           <button
             type="button"
