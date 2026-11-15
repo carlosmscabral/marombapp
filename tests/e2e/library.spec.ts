@@ -45,6 +45,48 @@ test('lists exercises alphabetically in pt-BR and filters by muscle chip and sea
   await expect(page.getByText('Nenhum exercício encontrado')).toBeVisible();
 });
 
+test('matches unaccented PT-BR search queries in Library and ExercisePickerModal', async ({
+  page,
+}) => {
+  const search = page.getByPlaceholder('Buscar exercícios ou músculos…');
+
+  for (const [query, expected] of [
+    ['agachamento bulgaro', 'Agachamento Búlgaro'],
+    ['triceps testa', 'Tríceps Testa'],
+    ['elevacao lateral', 'Elevação Lateral'],
+    ['abdomen', 'Prancha'],
+    ['gluteo', 'Elevação Pélvica'],
+    ['Agachamento Búlgaro', 'Agachamento Búlgaro'],
+    ['Skull Crushers', 'Tríceps Testa'],
+  ] as const) {
+    await search.fill(query);
+    await expect(card(page, expected)).toBeVisible();
+  }
+
+  await nav(page, 'Planos');
+  await page.getByRole('button', { name: 'Criar seu primeiro plano' }).click();
+  await page.getByPlaceholder('Nome do plano (ex.: PPL)').fill('PPL');
+  await page.getByPlaceholder('Nome do plano (ex.: PPL)').press('Enter');
+  await page.getByRole('button', { name: 'Adicionar Dia' }).click();
+  await page.getByPlaceholder('Nome do dia (ex.: Push 1)').fill('Dia A');
+  await page.getByRole('button', { name: 'Adicionar', exact: true }).click();
+  await expect(page.getByText('Dia de Treino', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Adicionar Exercício' }).click();
+  const picker = page.getByRole('dialog');
+  const pickerSearch = picker.getByPlaceholder('Buscar exercícios ou músculos…');
+  for (const [query, expected] of [
+    ['agachamento bulgaro', 'Agachamento Búlgaro'],
+    ['triceps testa', 'Tríceps Testa'],
+    ['elevacao', 'Elevação Lateral'],
+    ['abdomen', 'Abdominal Supra'],
+    ['gluteo', 'Agachamento Búlgaro'],
+  ] as const) {
+    await pickerSearch.fill(query);
+    await expect(picker.getByRole('button', { name: new RegExp(`^${expected}`) })).toBeVisible();
+  }
+});
+
 test('built-in exercises open read-only details in PT-BR without edit or delete', async ({ page }) => {
   await card(page, 'Supino Reto').click();
   const sheet = page.getByRole('dialog');

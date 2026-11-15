@@ -9,7 +9,7 @@ import { ArrowLeft, Calendar, CheckCircle2, Circle, Trash2 } from 'lucide-react'
 import { SignatureBar } from '../components/Layout';
 import { deleteSession, getSession } from '../lib/db';
 import { formatDateTime, formatDecimal, formatDuration, formatNumber } from '../lib/format';
-import { PT_BR, tExerciseName } from '../lib/i18n/pt-BR';
+import { localizeFirebaseError, PT_BR, tExerciseName } from '../lib/i18n/pt-BR';
 import type { Session } from '../types';
 
 /**
@@ -38,9 +38,7 @@ export function SessionDetail() {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setError(
-          err instanceof Error ? err.message : PT_BR.sessionDetail.loadFailed,
-        );
+        setError(localizeFirebaseError(err, PT_BR.sessionDetail.loadFailed));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

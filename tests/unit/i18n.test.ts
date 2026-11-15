@@ -9,8 +9,13 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   EXERCISE_NAMES_PT_BR,
+  FIREBASE_CONFIG_ERROR_PT_BR,
+  GENERIC_FIREBASE_ERROR_PT_BR,
   MUSCLE_LABELS_PT_BR,
+  PT_BR,
   SUB_MUSCLE_LABELS_PT_BR,
+  foldSearch,
+  localizeFirebaseError,
   tExercise,
   tExerciseName,
   tMuscle,
@@ -68,5 +73,67 @@ describe('pt-BR glossary coverage and display-layer rules (#16)', () => {
   it('sets lang="pt-BR" on index.html', () => {
     const html = fs.readFileSync(path.resolve(process.cwd(), 'index.html'), 'utf8');
     expect(html).toContain('<html lang="pt-BR">');
+  });
+});
+
+describe('foldSearch and localizeFirebaseError (#21, REQ-002)', () => {
+  it('folds NFD diacritics, cedilla, and uppercase characters while tolerating nullish values', () => {
+    expect(foldSearch('Agachamento Búlgaro')).toBe('agachamento bulgaro');
+    expect(foldSearch('Tríceps Testa')).toBe('triceps testa');
+    expect(foldSearch('Elevação Lateral')).toBe('elevacao lateral');
+    expect(foldSearch('Abdômen')).toBe('abdomen');
+    expect(foldSearch('Glúteos / Glúteo máximo')).toBe('gluteos / gluteo maximo');
+    expect(foldSearch('Quadríceps - Bíceps femoral')).toBe('quadriceps - biceps femoral');
+    expect(foldSearch('Pinça com Anilha')).toBe('pinca com anilha');
+    expect(foldSearch(undefined)).toBe('');
+    expect(foldSearch(null)).toBe('');
+  });
+
+  it('maps Firebase Auth, Firestore, and config error codes to PT-BR without leaking raw English messages', () => {
+    const netErr = Object.assign(
+      new Error('Firebase: Error (auth/network-request-failed).'),
+      { code: 'auth/network-request-failed' },
+    );
+    expect(localizeFirebaseError(netErr, PT_BR.auth.signInFailed)).toBe(
+      'Sem conexão de rede. Verifique sua internet e tente novamente.',
+    );
+
+    const keyErr = Object.assign(
+      new Error('Firebase: Error (auth/invalid-api-key).'),
+      { code: 'auth/invalid-api-key' },
+    );
+    expect(localizeFirebaseError(keyErr, FIREBASE_CONFIG_ERROR_PT_BR)).toBe(
+      'Chave de acesso do Firebase inválida. Verifique a configuração do aplicativo.',
+    );
+
+    expect(localizeFirebaseError('config')).toBe(FIREBASE_CONFIG_ERROR_PT_BR);
+    expect(
+      localizeFirebaseError(new Error('Firebase: Error (auth/popup-blocked).')),
+    ).toContain('pop-up');
+    expect(
+      localizeFirebaseError({ code: 'auth/popup-closed-by-user' }),
+    ).toContain('fechada');
+
+    const permErr = Object.assign(
+      new Error('Missing or insufficient permissions.'),
+      { code: 'permission-denied' },
+    );
+    expect(localizeFirebaseError(permErr, PT_BR.library.saveFailed)).toBe(
+      'Sem permissão para acessar ou salvar estes dados.',
+    );
+    expect(
+      localizeFirebaseError(
+        { code: 'firestore/unavailable', message: 'The service is currently unavailable.' },
+        PT_BR.sessionDetail.loadFailed,
+      ),
+    ).toBe('Serviço temporariamente indisponível. Verifique sua conexão e tente novamente.');
+
+    // Unknown raw English errors MUST return the PT-BR fallback and never leak err.message.
+    const rawSdkErr = new Error('Unexpected internal English gRPC transport failure');
+    expect(localizeFirebaseError(rawSdkErr, PT_BR.library.saveFailed)).toBe(
+      PT_BR.library.saveFailed,
+    );
+    expect(localizeFirebaseError(rawSdkErr)).toBe(GENERIC_FIREBASE_ERROR_PT_BR);
+    expect(localizeFirebaseError(null)).toBe(GENERIC_FIREBASE_ERROR_PT_BR);
   });
 });

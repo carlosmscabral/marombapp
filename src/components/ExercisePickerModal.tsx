@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { MUSCLE_GROUPS, type Exercise, type MuscleGroup } from '../types';
-import { PT_BR, tExercise, tMuscle, tSubMuscle } from '../lib/i18n/pt-BR';
+import { foldSearch, PT_BR, tExercise, tMuscle, tSubMuscle } from '../lib/i18n/pt-BR';
 import { cn } from './Layout';
 
 export interface ExercisePickerModalProps {
@@ -53,17 +53,17 @@ export function ExercisePickerModal({
   );
 
   const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase();
+    const needle = foldSearch(q.trim());
     return sortedLibrary.filter((e) => {
       if (muscle !== 'all' && e.primaryMuscle !== muscle) return false;
       if (!needle) return true;
       return (
-        tExercise(e).toLowerCase().includes(needle) ||
-        tMuscle(e.primaryMuscle).toLowerCase().includes(needle) ||
-        tSubMuscle(e.subMuscle).toLowerCase().includes(needle) ||
-        e.name.toLowerCase().includes(needle) ||
-        e.primaryMuscle.toLowerCase().includes(needle) ||
-        (e.subMuscle?.toLowerCase().includes(needle) ?? false)
+        foldSearch(tExercise(e)).includes(needle) ||
+        foldSearch(tMuscle(e.primaryMuscle)).includes(needle) ||
+        foldSearch(tSubMuscle(e.subMuscle)).includes(needle) ||
+        foldSearch(e.name).includes(needle) ||
+        foldSearch(e.primaryMuscle).includes(needle) ||
+        foldSearch(e.subMuscle).includes(needle)
       );
     });
   }, [sortedLibrary, q, muscle]);

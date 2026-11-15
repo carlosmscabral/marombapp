@@ -7,7 +7,7 @@ import { type ReactNode, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { BottomSheet } from '../../components/BottomSheet';
 import { createExercise, updateExercise } from '../../lib/db';
-import { PT_BR, tMuscle, tSubMuscle } from '../../lib/i18n/pt-BR';
+import { localizeFirebaseError, PT_BR, tMuscle, tSubMuscle } from '../../lib/i18n/pt-BR';
 import {
   MUSCLE_GROUPS,
   SUB_MUSCLES,
@@ -55,7 +55,7 @@ export function ExerciseFormSheet({ editingExercise, onClose }: ExerciseFormShee
       onClose();
     } catch (err) {
       console.error('Save exercise failed', err);
-      setSaveError((err as Error)?.message || PT_BR.library.saveFailed);
+      setSaveError(localizeFirebaseError(err, PT_BR.library.saveFailed));
     } finally {
       setSaving(false);
     }

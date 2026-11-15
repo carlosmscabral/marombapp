@@ -5,7 +5,7 @@
 
 import { Dumbbell, AlertCircle } from 'lucide-react';
 import { useAuth } from '../lib/auth';
-import { PT_BR } from '../lib/i18n/pt-BR';
+import { localizeFirebaseError, PT_BR } from '../lib/i18n/pt-BR';
 import { SignatureBar } from '../components/Layout';
 
 /**
@@ -44,7 +44,11 @@ export function SignIn() {
             {error && error !== 'unauthorized' && (
               <div className="w-full flex items-start gap-2 p-3 rounded-lg bg-secondary-container/20 border border-secondary/30 text-left">
                 <AlertCircle className="w-4 h-4 text-secondary mt-0.5 shrink-0" />
-                <p className="text-xs text-on-surface-variant">{error}</p>
+                <p className="text-xs text-on-surface-variant">
+                  {error === 'config' || /^firebase:/i.test(error)
+                    ? localizeFirebaseError(error, PT_BR.auth.signInFailed)
+                    : error}
+                </p>
               </div>
             )}
 

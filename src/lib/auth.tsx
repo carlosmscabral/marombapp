@@ -21,7 +21,11 @@ import {
   type User,
 } from 'firebase/auth';
 import { getFirebaseAuth, resolveAllowedUid } from './firebase';
-import { PT_BR } from './i18n/pt-BR';
+import {
+  FIREBASE_CONFIG_ERROR_PT_BR,
+  localizeFirebaseError,
+  PT_BR,
+} from './i18n/pt-BR';
 
 interface AuthContextValue {
   user: User | null;
@@ -63,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       auth = getFirebaseAuth();
     } catch (err) {
       setUser(null);
-      setError((err as Error)?.message || 'config');
+      setError(localizeFirebaseError(err, FIREBASE_CONFIG_ERROR_PT_BR));
       setLoading(false);
       return undefined;
     }
@@ -87,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return unsub;
     } catch (err) {
       setUser(null);
-      setError((err as Error)?.message || 'config');
+      setError(localizeFirebaseError(err, FIREBASE_CONFIG_ERROR_PT_BR));
       setLoading(false);
       return undefined;
     }
@@ -104,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           auth = getFirebaseAuth();
         } catch (err) {
-          setError((err as Error)?.message || 'config');
+          setError(localizeFirebaseError(err, FIREBASE_CONFIG_ERROR_PT_BR));
           return;
         }
         const provider = new GoogleAuthProvider();
@@ -121,7 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             try {
               await signInWithRedirect(auth, provider);
             } catch (redirectErr) {
-              setError((redirectErr as Error)?.message || PT_BR.auth.signInFailed);
+              setError(localizeFirebaseError(redirectErr, PT_BR.auth.signInFailed));
             }
             return;
           }
@@ -129,7 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             code !== 'auth/popup-closed-by-user' &&
             code !== 'auth/cancelled-popup-request'
           ) {
-            setError((err as Error)?.message || PT_BR.auth.signInFailed);
+            setError(localizeFirebaseError(err, PT_BR.auth.signInFailed));
           }
         }
       },

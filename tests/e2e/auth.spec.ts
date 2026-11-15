@@ -55,15 +55,22 @@ test('sign-out from the account menu returns to the sign-in screen', async ({ pa
   await expect(signInButton(page)).toBeVisible();
 });
 
-test('closing the popup shows no error and a generic failure shows its message', async ({ page }) => {
+test('closing the popup shows no error and a network failure shows localized PT-BR copy', async ({
+  page,
+}) => {
   await boot(page, { popupError: 'auth/popup-closed-by-user' });
   await signInButton(page).click();
   await expect(signInButton(page)).toBeEnabled();
   await expect(page.locator('p.text-xs')).toHaveCount(0);
 
-  await page.evaluate(() => localStorage.setItem('fake-auth:popup-error', 'auth/network-request-failed'));
+  await page.evaluate(() =>
+    localStorage.setItem('fake-auth:popup-error', 'auth/network-request-failed'),
+  );
   await signInButton(page).click();
-  await expect(page.getByText('Firebase: Error (auth/network-request-failed).')).toBeVisible();
+  await expect(
+    page.getByText('Sem conexão de rede. Verifique sua internet e tente novamente.'),
+  ).toBeVisible();
+  await expect(page.getByText(/Firebase: Error/)).toHaveCount(0);
 });
 
 test('a blocked popup falls back to the redirect flow', async ({ page }) => {
@@ -78,7 +85,9 @@ test('unknown client routes redirect to analytics once signed in', async ({ page
   await expect(page.getByRole('heading', { name: 'Análises' })).toBeVisible();
 });
 
-test('missing or invalid Firebase config mounts SignIn at 390x844 with zero uncaught page errors', async ({ page }) => {
+test('missing or invalid Firebase config mounts SignIn at 390x844 in PT-BR with zero uncaught page errors', async ({
+  page,
+}) => {
   const pageErrors: Error[] = [];
   page.on('pageerror', (err) => pageErrors.push(err));
 
@@ -86,10 +95,22 @@ test('missing or invalid Firebase config mounts SignIn at 390x844 with zero unca
   expect(page.viewportSize()).toEqual({ width: 390, height: 844 });
   await expect(page.getByRole('heading', { name: 'MarombApp' })).toBeVisible();
   await expect(signInButton(page)).toBeVisible();
-  await expect(page.getByText('Firebase: Error (auth/invalid-api-key).')).toBeVisible();
+  const invalidKeyPtBr =
+    'Chave de acesso do Firebase inválida. Verifique a configuração do aplicativo.';
+  await expect(page.getByText(invalidKeyPtBr)).toBeVisible();
+  await expect(page.getByText(/Firebase: Error/)).toHaveCount(0);
   await expect(page.getByRole('navigation')).toHaveCount(0);
 
   await signInButton(page).click();
-  await expect(page.getByText('Firebase: Error (auth/invalid-api-key).')).toBeVisible();
+  await expect(page.getByText(invalidKeyPtBr)).toBeVisible();
+
+  await page.evaluate(() => localStorage.setItem('fake-auth:init-error', 'config'));
+  await page.reload();
+  await expect(
+    page.getByText(
+      'Configuração do Firebase inválida ou indisponível. Verifique as credenciais do aplicativo.',
+    ),
+  ).toBeVisible();
+  await expect(page.getByText('config', { exact: true })).toHaveCount(0);
   expect(pageErrors).toEqual([]);
 });

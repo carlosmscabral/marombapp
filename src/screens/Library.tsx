@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Dumbbell as DumbbellIcon, Plus, Search } from 'lucide-react';
 import { cn } from '../components/Layout';
 import { subscribeLibrary } from '../lib/db';
-import { PT_BR, tExercise, tMuscle, tSubMuscle } from '../lib/i18n/pt-BR';
+import { foldSearch, PT_BR, tExercise, tMuscle, tSubMuscle } from '../lib/i18n/pt-BR';
 import { MUSCLE_GROUPS, type Exercise, type MuscleGroup } from '../types';
 import { ExerciseDetailSheet } from './library/ExerciseDetailSheet';
 import { ExerciseFormSheet } from './library/ExerciseFormSheet';
@@ -46,17 +46,17 @@ export function Library() {
   );
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = foldSearch(search.trim());
     return sortedExercises.filter((ex) => {
       if (muscle !== 'all' && ex.primaryMuscle !== muscle) return false;
       if (!q) return true;
       return (
-        tExercise(ex).toLowerCase().includes(q) ||
-        tMuscle(ex.primaryMuscle).toLowerCase().includes(q) ||
-        tSubMuscle(ex.subMuscle).toLowerCase().includes(q) ||
-        ex.name.toLowerCase().includes(q) ||
-        ex.primaryMuscle.toLowerCase().includes(q) ||
-        (ex.subMuscle?.toLowerCase().includes(q) ?? false)
+        foldSearch(tExercise(ex)).includes(q) ||
+        foldSearch(tMuscle(ex.primaryMuscle)).includes(q) ||
+        foldSearch(tSubMuscle(ex.subMuscle)).includes(q) ||
+        foldSearch(ex.name).includes(q) ||
+        foldSearch(ex.primaryMuscle).includes(q) ||
+        foldSearch(ex.subMuscle).includes(q)
       );
     });
   }, [sortedExercises, search, muscle]);

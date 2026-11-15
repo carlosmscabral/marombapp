@@ -185,17 +185,56 @@ describe('AuthProvider and SignIn resilience', () => {
       );
     });
 
+    const expectedInvalidKeyMsg =
+      'Chave de acesso do Firebase inválida. Verifique a configuração do aplicativo.';
     expect(capturedAuth?.loading).toBe(false);
     expect(capturedAuth?.user).toBeNull();
-    expect(capturedAuth?.error).toBe('Firebase: Error (auth/invalid-api-key).');
+    expect(capturedAuth?.error).toBe(expectedInvalidKeyMsg);
     expect(container.textContent).toContain('MarombApp');
     expect(container.textContent).toContain('Entrar com Google');
-    expect(container.textContent).toContain('Firebase: Error (auth/invalid-api-key).');
+    expect(container.textContent).toContain(expectedInvalidKeyMsg);
+    expect(container.textContent).not.toContain('Firebase: Error');
 
     await act(async () => {
       await expect(capturedAuth!.signIn()).resolves.toBeUndefined();
     });
-    expect(capturedAuth?.error).toBe('Firebase: Error (auth/invalid-api-key).');
+    expect(capturedAuth?.error).toBe(expectedInvalidKeyMsg);
+  });
+
+  it('localizes uncoded init errors and popup network failures to PT-BR instead of raw English or config', async () => {
+    mocks.getFirebaseAuth.mockImplementationOnce(() => {
+      throw new Error('');
+    });
+
+    await act(async () => {
+      root!.render(
+        <AuthProvider>
+          <Probe />
+        </AuthProvider>,
+      );
+    });
+
+    expect(capturedAuth?.error).toContain('Configuração do Firebase');
+    expect(container.textContent).not.toContain('config');
+
+    mocks.getFirebaseAuth.mockReturnValue({});
+    mocks.signInWithPopup.mockRejectedValueOnce(
+      Object.assign(new Error('Firebase: Error (auth/network-request-failed).'), {
+        code: 'auth/network-request-failed',
+      }),
+    );
+
+    await act(async () => {
+      await capturedAuth!.signIn();
+    });
+
+    expect(capturedAuth?.error).toBe(
+      'Sem conexão de rede. Verifique sua internet e tente novamente.',
+    );
+    expect(container.textContent).toContain(
+      'Sem conexão de rede. Verifique sua internet e tente novamente.',
+    );
+    expect(container.textContent).not.toContain('Firebase: Error');
   });
 
   it('rejects and signs out a signed-in user when ALLOWED_UID is empty', async () => {

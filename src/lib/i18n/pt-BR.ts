@@ -12,6 +12,12 @@ export {
   tMuscle,
   tSubMuscle,
 } from './exercises.pt-BR';
+export {
+  FIREBASE_CONFIG_ERROR_PT_BR,
+  GENERIC_FIREBASE_ERROR_PT_BR,
+  localizeFirebaseError,
+} from './errors.pt-BR';
+export { foldSearch } from './search';
 
 export const PT_BR = {
   common: {
