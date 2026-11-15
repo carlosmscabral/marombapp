@@ -8,7 +8,7 @@ Only the deployer writes this file, after every deploy and every rollback. Other
 | Live revision | `marombapp-serving-00011-tr2` |
 | Rollback revision | `marombapp-serving-00010-zcx` |
 | Source commit | `9a87baaf3ed33e12ff61d556885bc61761a6efdf` (`9a87baa`) |
-| Applied migrations | `firestore:marombapp` (ruleset `88e55196-5b7e-400a-927f-70777c7c9001` + index `CICAgOjXh4EK` `READY`); `firestore:marombapp-test` (ruleset `81832c18-7dee-420c-b68d-33903eb5f578` + index `CICAgOjXh4EK` `READY` per [ADR-005](../adr/ADR-005-marombapp-db-is-production-marombapp-test-for-tests.md)) |
+| Applied migrations | `firestore:marombapp` (ruleset `88e55196-5b7e-400a-927f-70777c7c9001` + index `CICAgOjXh4EK` `READY`); `firestore:marombapp-test` (ruleset `81832c18-7dee-420c-b68d-33903eb5f578` + index `CICAgOjXh4EK` `READY` per [ADR-005](../adr/ADR-005-marombapp-db-is-production-marombapp-test-for-tests.md)); `#15` copy `(default)->marombapp` at `2026-11-15T22:49:57Z` from `1de69c4` (`125` docs: `85` exercises, `3` plans, `10` days, `27` sessions; evidence `15-apply.md`) |
 | Deployed at (UTC) | `2026-11-15T19:12:47Z` |
 | Deployed by | deployer |
 
