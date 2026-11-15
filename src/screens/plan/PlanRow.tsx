@@ -38,7 +38,13 @@ export function PlanRow({
   const dayCount = dayIds?.length ?? null;
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
-  const [renameValue, setRenameValue] = useState(plan.name);
+  const [optimisticName, setOptimisticName] = useState<string | null>(null);
+  const displayName = optimisticName ?? plan.name;
+  const [renameValue, setRenameValue] = useState(displayName);
+
+  useEffect(() => {
+    setOptimisticName(null);
+  }, [plan.name]);
 
   useEffect(() => {
     return subscribePlanDays(plan.id, (days) => setDayIds(days.map((d) => d.id)));
@@ -46,7 +52,8 @@ export function PlanRow({
 
   const submitRename = async () => {
     const next = renameValue.trim();
-    if (next && next !== plan.name) {
+    if (next && next !== displayName) {
+      setOptimisticName(next);
       await renamePlan(plan.id, next).catch(() => {});
     }
     setRenaming(false);
@@ -74,14 +81,14 @@ export function PlanRow({
                   if (e.key === 'Enter') void submitRename();
                   if (e.key === 'Escape') {
                     setRenaming(false);
-                    setRenameValue(plan.name);
+                    setRenameValue(displayName);
                   }
                 }}
                 className="font-headline text-lg font-semibold bg-surface-container-highest/40 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-primary/40"
               />
             ) : (
               <h3 className="font-headline text-lg font-semibold truncate">
-                {plan.name}
+                {displayName}
               </h3>
             )}
             {plan.active && (
@@ -130,15 +137,16 @@ export function PlanRow({
                   label={PT_BR.plan.rename}
                   onClick={() => {
                     setMenuOpen(false);
-                    setRenameValue(plan.name);
+                    setRenameValue(displayName);
                     setRenaming(true);
                   }}
                 />
                 <MenuItem
                   label={PT_BR.plan.archive}
-                  onClick={async () => {
+                  onClick={() => {
                     setMenuOpen(false);
-                    await archivePlan(plan.id).catch(() => {});
+                    onDeleted();
+                    void archivePlan(plan.id).catch(() => {});
                   }}
                 />
                 <MenuItem
@@ -146,7 +154,7 @@ export function PlanRow({
                   variant="danger"
                   onClick={() => {
                     setMenuOpen(false);
-                    if (!confirm(PT_BR.plan.confirmDeletePlan(plan.name))) {
+                    if (!confirm(PT_BR.plan.confirmDeletePlan(displayName))) {
                       return;
                     }
                     onDeleted();

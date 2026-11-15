@@ -1,17 +1,18 @@
 /**
  * Firestore repository for workout sessions (`sessions` collection).
- * Delegates nested `exercises` mutations to `sessionShadow` so rapid gym inputs stay race-free.
+ * Queues session lifecycle writes locally with client-generated IDs and reads cache first so gym flows never stall offline.
  */
 
 import {
-  addDoc,
   deleteDoc,
+  doc,
   getDoc,
   getDocFromCache,
   limit,
   onSnapshot,
   orderBy,
   query,
+  setDoc,
   updateDoc,
   waitForPendingWrites,
   where,
@@ -25,16 +26,29 @@ import type {
   PlanDay,
   Session,
   SessionExercise,
-  SessionSet,
 } from '../../types';
 import {
   clearShadow,
-  mutateSessionExercises,
+  drainShadowQueue,
   sessionDoc,
   sessionsCol,
   setInitialShadow,
   syncShadowFromSnapshot,
 } from './sessionShadow';
+
+export * from './sessionMutations';
+
+type LocalSessionEvent =
+  | { type: 'created'; session: Session }
+  | { type: 'ended'; sessionId: string };
+
+const activeSessionListeners = new Set<(event: LocalSessionEvent) => void>();
+
+function emitSessionEvent(event: LocalSessionEvent): void {
+  for (const listener of activeSessionListeners) {
+    listener(event);
+  }
+}
 
 function sessionFromDoc(id: string, data: Record<string, unknown>): Session {
   return {
@@ -52,7 +66,7 @@ function sessionFromDoc(id: string, data: Record<string, unknown>): Session {
 }
 
 /**
- * Waits for Firestore to flush queued local mutations when online.
+ * Opportunistically asks Firestore to flush queued local mutations when online.
  */
 export async function flushPendingWrites(): Promise<void> {
   await waitForPendingWrites(getFirestoreDb());
@@ -60,22 +74,56 @@ export async function flushPendingWrites(): Promise<void> {
 
 /**
  * Subscribes to the single active workout session (`status == 'active'`).
- * Syncs the in-memory `exercises` shadow whenever a clean server snapshot arrives.
+ * Propagates local `createSession`, `finishSession`, and `abandonSession` transitions immediately before snapshot echoes arrive.
  */
 export function subscribeActiveSession(
   cb: (session: Session | null) => void,
 ): Unsubscribe {
+  let pendingCreated: Session | null = null;
+  const endedIds = new Set<string>();
+
+  const onLocalEvent = (event: LocalSessionEvent) => {
+    if (event.type === 'created') {
+      endedIds.delete(event.session.id);
+      pendingCreated = event.session;
+      cb(event.session);
+      return;
+    }
+    endedIds.add(event.sessionId);
+    if (pendingCreated?.id === event.sessionId) {
+      pendingCreated = null;
+    }
+    cb(pendingCreated);
+  };
+  activeSessionListeners.add(onLocalEvent);
+
   const q = query(sessionsCol(), where('status', '==', 'active'), limit(1));
-  return onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
+  const offSnap = onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
+    const presentIds = new Set(snap.docs.map((docItem) => docItem.id));
+    for (const id of endedIds) {
+      if (!presentIds.has(id)) endedIds.delete(id);
+    }
     if (snap.empty) {
-      cb(null);
+      cb(pendingCreated);
       return;
     }
     const d = snap.docs[0];
+    if (endedIds.has(d.id)) {
+      cb(pendingCreated);
+      return;
+    }
+    if (pendingCreated?.id === d.id) {
+      pendingCreated = null;
+    }
     const parsed = sessionFromDoc(d.id, d.data());
     syncShadowFromSnapshot(d.id, parsed.exercises, d.metadata.hasPendingWrites);
     cb(parsed);
   });
+
+  return () => {
+    activeSessionListeners.delete(onLocalEvent);
+    offSnap();
+  };
 }
 
 /**
@@ -97,20 +145,36 @@ export function subscribeRecentSessions(
 }
 
 /**
- * Loads a single session document, preferring local IndexedDB cache when offline.
+ * Loads a single session document from local IndexedDB cache first so poor gym signal never stalls `SessionDetail`.
+ * Starts a non-blocking background network `getDoc` refresh when cached, and falls back to network `getDoc` only on cache miss.
  */
-export async function getSession(id: string): Promise<Session | null> {
+export async function getSession(
+  id: string,
+  onRefresh?: (session: Session) => void,
+): Promise<Session | null> {
   const ref = sessionDoc(id);
-  const snap = await getDoc(ref).catch(() => getDocFromCache(ref));
-  if (!snap.exists()) return null;
-  return sessionFromDoc(snap.id, snap.data());
+  const cachedSnap = await getDocFromCache(ref).catch(() => null);
+  if (cachedSnap && cachedSnap.exists()) {
+    const cachedSession = sessionFromDoc(cachedSnap.id, cachedSnap.data());
+    void getDoc(ref)
+      .then((freshSnap) => {
+        if (freshSnap.exists()) {
+          onRefresh?.(sessionFromDoc(freshSnap.id, freshSnap.data()));
+        }
+      })
+      .catch(() => {});
+    return cachedSession;
+  }
+  const netSnap = await getDoc(ref);
+  if (!netSnap.exists()) return null;
+  return sessionFromDoc(netSnap.id, netSnap.data());
 }
 
 /**
- * Starts a new active workout session for `day` and pre-fills set weights and reps
- * from `historyMap` when prior completed executions exist.
+ * Starts a new active workout session for `day` with a client-generated ID and pre-fills sets from `historyMap`.
+ * Queues `setDoc` into Firestore's local persistence before returning without awaiting server acknowledgment.
  */
-export async function createSession(
+export function createSession(
   plan: Plan,
   day: PlanDay,
   library: Exercise[],
@@ -142,143 +206,52 @@ export async function createSession(
     exercises,
   };
 
-  const ref = await addDoc(sessionsCol(), sessionData);
+  const ref = doc(sessionsCol());
   setInitialShadow(ref.id, exercises);
-  return ref.id;
+  void setDoc(ref, sessionData).catch(() => {});
+  emitSessionEvent({
+    type: 'created',
+    session: { id: ref.id, ...sessionData },
+  });
+  return Promise.resolve(ref.id);
 }
 
 /**
- * Updates a top-level scalar field (such as `sessionNotes`) on `sessionId`.
+ * Queues an update to a top-level scalar field (such as `sessionNotes`) on `sessionId` without awaiting server acknowledgment.
  */
-export async function updateSessionField<K extends keyof Session>(
+export function updateSessionField<K extends keyof Session>(
   sessionId: string,
   field: K,
   value: Session[K],
 ): Promise<void> {
-  await updateDoc(sessionDoc(sessionId), { [field]: value });
+  void updateDoc(sessionDoc(sessionId), { [field]: value }).catch(() => {});
+  return Promise.resolve();
 }
 
 /**
- * Updates metadata fields (such as `notes`) on a single exercise inside `sessionId`.
- */
-export async function updateSessionExercise(
-  sessionId: string,
-  exerciseIndex: number,
-  updates: Partial<SessionExercise>,
-): Promise<void> {
-  await mutateSessionExercises(sessionId, (exercises) => {
-    if (!exercises[exerciseIndex]) return null;
-    exercises[exerciseIndex] = { ...exercises[exerciseIndex], ...updates };
-    return exercises;
-  });
-}
-
-/**
- * Writes weight, reps, and completion timestamp for a single set row.
- */
-export async function logSet(
-  sessionId: string,
-  exerciseIndex: number,
-  setIndex: number,
-  set: SessionSet,
-): Promise<void> {
-  await mutateSessionExercises(sessionId, (exercises) => {
-    const ex = exercises[exerciseIndex];
-    if (!ex || !ex.sets[setIndex]) return null;
-    ex.sets[setIndex] = set;
-    return exercises;
-  });
-}
-
-/**
- * Appends a set to an exercise, copying weight and reps from the previous set.
- */
-export async function addSetToExercise(
-  sessionId: string,
-  exerciseIndex: number,
-): Promise<void> {
-  await mutateSessionExercises(sessionId, (exercises) => {
-    const ex = exercises[exerciseIndex];
-    if (!ex) return null;
-    const lastSet = ex.sets[ex.sets.length - 1];
-    ex.sets.push({
-      weight: lastSet?.weight ?? 0,
-      reps: lastSet?.reps ?? 0,
-      completedAt: null,
-    });
-    return exercises;
-  });
-}
-
-/**
- * Removes `setIndex` from an exercise when more than one set exists.
- */
-export async function removeSetFromExercise(
-  sessionId: string,
-  exerciseIndex: number,
-  setIndex: number,
-): Promise<void> {
-  await mutateSessionExercises(sessionId, (exercises) => {
-    const ex = exercises[exerciseIndex];
-    if (!ex || ex.sets.length <= 1 || !ex.sets[setIndex]) return null;
-    ex.sets.splice(setIndex, 1);
-    return exercises;
-  });
-}
-
-/**
- * Appends an ad-hoc exercise to an active workout session, pre-filling 3 sets from history.
- */
-export async function addExerciseToSession(
-  sessionId: string,
-  exercise: Exercise,
-  latestHistory?: HistoryEntry,
-): Promise<void> {
-  await mutateSessionExercises(sessionId, (exercises) => {
-    exercises.push({
-      exerciseId: exercise.id,
-      exerciseName: exercise.name,
-      notes: '',
-      sets: buildInitialSetsFromHistory(3, latestHistory),
-    });
-    return exercises;
-  });
-}
-
-/**
- * Removes an exercise card from an active workout session.
- */
-export async function removeExerciseFromSession(
-  sessionId: string,
-  exerciseIndex: number,
-): Promise<void> {
-  await mutateSessionExercises(sessionId, (exercises) => {
-    if (!exercises[exerciseIndex]) return null;
-    exercises.splice(exerciseIndex, 1);
-    return exercises;
-  });
-}
-
-/**
- * Marks `sessionId` as completed and clears its in-memory mutation shadow.
+ * Drains local shadow mutations, marks `sessionId` as completed in Firestore's local queue, and clears active state immediately.
  */
 export async function finishSession(sessionId: string): Promise<void> {
+  await drainShadowQueue(sessionId);
   clearShadow(sessionId);
-  await updateDoc(sessionDoc(sessionId), {
+  void updateDoc(sessionDoc(sessionId), {
     finishedAt: Date.now(),
     status: 'completed',
-  });
+  }).catch(() => {});
+  emitSessionEvent({ type: 'ended', sessionId });
 }
 
 /**
- * Marks `sessionId` as abandoned and clears its in-memory mutation shadow.
+ * Drains local shadow mutations, marks `sessionId` as abandoned in Firestore's local queue, and clears active state immediately.
  */
 export async function abandonSession(sessionId: string): Promise<void> {
+  await drainShadowQueue(sessionId);
   clearShadow(sessionId);
-  await updateDoc(sessionDoc(sessionId), {
+  void updateDoc(sessionDoc(sessionId), {
     finishedAt: Date.now(),
     status: 'abandoned',
-  });
+  }).catch(() => {});
+  emitSessionEvent({ type: 'ended', sessionId });
 }
 
 /**
@@ -288,5 +261,6 @@ export async function abandonSession(sessionId: string): Promise<void> {
 export function deleteSession(sessionId: string): Promise<void> {
   clearShadow(sessionId);
   void deleteDoc(sessionDoc(sessionId)).catch(() => {});
+  emitSessionEvent({ type: 'ended', sessionId });
   return Promise.resolve();
 }

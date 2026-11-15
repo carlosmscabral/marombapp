@@ -18,6 +18,8 @@ export interface PlanListViewProps {
   plans: Plan[];
   onOpen: (id: string) => void;
   onActivatePlan?: (id: string) => void;
+  onCreatedPlan?: (plan: Plan) => void;
+  onRemovedPlan?: (id: string) => void;
 }
 
 /**
@@ -27,6 +29,8 @@ export function PlanListView({
   plans,
   onOpen,
   onActivatePlan,
+  onCreatedPlan,
+  onRemovedPlan,
 }: PlanListViewProps) {
   const [deletedIds, setDeletedIds] = useState<ReadonlySet<string>>(() => new Set());
   const [localActiveId, setLocalActiveId] = useState<string | null>(null);
@@ -72,10 +76,18 @@ export function PlanListView({
       cancelCreate();
       return;
     }
+    const isFirst = visiblePlans.length === 0;
     const id = await createPlan(name);
     setNewName('');
     setCreating(false);
-    if (visiblePlans.length === 0) {
+    onCreatedPlan?.({
+      id,
+      name,
+      active: isFirst,
+      createdAt: Date.now(),
+      archivedAt: null,
+    });
+    if (isFirst) {
       setLocalActiveId(id);
       onActivatePlan?.(id);
       void setActivePlan(id, knownPlansForActivation).catch(() => {});
@@ -158,7 +170,10 @@ export function PlanListView({
               setLocalActiveId(plan.id);
               onActivatePlan?.(plan.id);
             }}
-            onDeleted={() => setDeletedIds((prev) => new Set(prev).add(plan.id))}
+            onDeleted={() => {
+              setDeletedIds((prev) => new Set(prev).add(plan.id));
+              onRemovedPlan?.(plan.id);
+            }}
           />
         ))}
       </div>

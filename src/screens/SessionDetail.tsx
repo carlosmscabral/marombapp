@@ -30,7 +30,9 @@ export function SessionDetail() {
       return;
     }
     setLoading(true);
-    getSession(sessionId)
+    getSession(sessionId, (fresh) => {
+      if (!cancelled) setSession(fresh);
+    })
       .then((s) => {
         if (cancelled) return;
         if (!s) setError(PT_BR.sessionDetail.notFound);

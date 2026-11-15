@@ -18,12 +18,17 @@ import {
 export interface ExerciseFormSheetProps {
   editingExercise: Exercise | null;
   onClose: () => void;
+  onSaved?: (exercise: Exercise) => void;
 }
 
 /**
  * Renders a bottom-sheet form to create a custom exercise or edit an existing one.
  */
-export function ExerciseFormSheet({ editingExercise, onClose }: ExerciseFormSheetProps) {
+export function ExerciseFormSheet({
+  editingExercise,
+  onClose,
+  onSaved,
+}: ExerciseFormSheetProps) {
   const [name, setName] = useState(editingExercise?.name ?? '');
   const [primaryMuscle, setPrimaryMuscle] = useState<MuscleGroup>(
     editingExercise?.primaryMuscle ?? 'chest',
@@ -49,8 +54,14 @@ export function ExerciseFormSheet({ editingExercise, onClose }: ExerciseFormShee
       if (subMuscle) payload.subMuscle = subMuscle;
       if (editingExercise) {
         await updateExercise(editingExercise.id, payload);
+        onSaved?.({
+          id: editingExercise.id,
+          ...payload,
+          isCustom: editingExercise.isCustom,
+        });
       } else {
-        await createExercise(payload);
+        const id = await createExercise(payload);
+        onSaved?.({ id, ...payload, isCustom: true });
       }
       onClose();
     } catch (err) {

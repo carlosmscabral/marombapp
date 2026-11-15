@@ -3,10 +3,51 @@
  * Provides up/down reordering buttons, exercise count summary, day deletion, and day creation input.
  */
 
-import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Play, Plus, Trash2 } from 'lucide-react';
 import { SignatureBar } from '../../components/Layout';
 import { PT_BR } from '../../lib/i18n/pt-BR';
 import type { PlanDay } from '../../types';
+
+/**
+ * Applies an optimistic ID permutation to `days`, appending any newly added day IDs not yet in `orderIds`.
+ */
+export function applyOptimisticDayOrder(
+  days: PlanDay[],
+  orderIds: readonly string[] | null,
+): PlanDay[] {
+  if (!orderIds) return days;
+  const byId = new Map(days.map((d) => [d.id, d] as const));
+  const ordered: PlanDay[] = [];
+  for (const id of orderIds) {
+    const found = byId.get(id);
+    if (found) {
+      ordered.push(found);
+      byId.delete(id);
+    }
+  }
+  for (const extra of byId.values()) {
+    ordered.push(extra);
+  }
+  return ordered;
+}
+
+/**
+ * Renders the floating "Iniciar Treino" action button when an active plan has at least one day.
+ */
+export function StartWorkoutFab({ onClick }: { onClick: () => void }) {
+  return (
+    <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40">
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex items-center gap-2 bg-gradient-to-br from-primary to-primary-container text-on-primary-fixed font-headline font-semibold px-6 py-3 rounded-full shadow-[0_16px_32px_rgba(106,178,255,0.15)] ring-4 ring-background"
+      >
+        <Play className="w-5 h-5 fill-on-primary-fixed" />
+        {PT_BR.plan.startWorkoutFab}
+      </button>
+    </div>
+  );
+}
 
 export interface DayRowProps {
   day: PlanDay;

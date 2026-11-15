@@ -1,14 +1,14 @@
 /**
  * Firestore repository for the exercise encyclopedia (`exercises` collection).
- * Streams sorted exercise entries and handles custom exercise CRUD operations.
+ * Streams sorted exercise entries and queues custom exercise CRUD writes locally without awaiting server acknowledgments.
  */
 
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
   onSnapshot,
+  setDoc,
   updateDoc,
   type Unsubscribe,
 } from 'firebase/firestore';
@@ -33,28 +33,31 @@ export function subscribeLibrary(cb: (items: Exercise[]) => void): Unsubscribe {
 }
 
 /**
- * Creates a user-defined exercise (`isCustom: true`) and returns its document id.
+ * Creates a user-defined exercise (`isCustom: true`) with a client-generated ID and queues `setDoc` without awaiting server acknowledgment.
  */
-export async function createExercise(
+export function createExercise(
   data: Omit<Exercise, 'id' | 'isCustom'>,
 ): Promise<string> {
-  const ref = await addDoc(exercisesCol(), { ...data, isCustom: true });
-  return ref.id;
+  const ref = doc(exercisesCol());
+  void setDoc(ref, { ...data, isCustom: true }).catch(() => {});
+  return Promise.resolve(ref.id);
 }
 
 /**
- * Patches fields on an existing custom exercise document.
+ * Queues field updates on an existing custom exercise document without awaiting server acknowledgment.
  */
-export async function updateExercise(
+export function updateExercise(
   id: string,
   updates: Partial<Omit<Exercise, 'id'>>,
 ): Promise<void> {
-  await updateDoc(exerciseDoc(id), updates);
+  void updateDoc(exerciseDoc(id), updates).catch(() => {});
+  return Promise.resolve();
 }
 
 /**
- * Deletes an exercise document by id.
+ * Queues deletion of an exercise document by id without awaiting server acknowledgment.
  */
-export async function deleteExercise(id: string): Promise<void> {
-  await deleteDoc(exerciseDoc(id));
+export function deleteExercise(id: string): Promise<void> {
+  void deleteDoc(exerciseDoc(id)).catch(() => {});
+  return Promise.resolve();
 }

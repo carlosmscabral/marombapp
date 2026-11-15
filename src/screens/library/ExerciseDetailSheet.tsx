@@ -15,6 +15,7 @@ export interface ExerciseDetailSheetProps {
   exercise: Exercise;
   onClose: () => void;
   onEdit: (exercise: Exercise) => void;
+  onDeleted?: (id: string) => void;
 }
 
 /**
@@ -24,11 +25,13 @@ export function ExerciseDetailSheet({
   exercise,
   onClose,
   onEdit,
+  onDeleted,
 }: ExerciseDetailSheetProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const handleDelete = async () => {
     await deleteExercise(exercise.id);
+    onDeleted?.(exercise.id);
     onClose();
   };
 

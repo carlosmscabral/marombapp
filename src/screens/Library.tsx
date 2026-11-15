@@ -17,6 +17,12 @@ import { ExerciseFormSheet } from './library/ExerciseFormSheet';
  */
 export function Library() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [optimisticUpserts, setOptimisticUpserts] = useState<
+    ReadonlyMap<string, Exercise>
+  >(() => new Map());
+  const [deletedIds, setDeletedIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [loaded, setLoaded] = useState(false);
   const [search, setSearch] = useState('');
   const [muscle, setMuscle] = useState<'all' | MuscleGroup>('all');
@@ -28,21 +34,39 @@ export function Library() {
   useEffect(() => {
     return subscribeLibrary((items) => {
       setExercises(items);
+      setOptimisticUpserts(new Map());
+      const present = new Set(items.map((it) => it.id));
+      setDeletedIds((prev) => {
+        if (prev.size === 0) return prev;
+        const next = new Set<string>();
+        for (const id of prev) {
+          if (present.has(id)) next.add(id);
+        }
+        return next;
+      });
       setLoaded(true);
     });
   }, []);
 
+  const effectiveExercises = useMemo(() => {
+    const merged = new Map(exercises.map((ex) => [ex.id, ex] as const));
+    for (const [id, ex] of optimisticUpserts) {
+      merged.set(id, ex);
+    }
+    return [...merged.values()].filter((ex) => !deletedIds.has(ex.id));
+  }, [exercises, optimisticUpserts, deletedIds]);
+
   const detail = useMemo(
-    () => exercises.find((e) => e.id === detailId) ?? null,
-    [exercises, detailId],
+    () => effectiveExercises.find((e) => e.id === detailId) ?? null,
+    [effectiveExercises, detailId],
   );
 
   const sortedExercises = useMemo(
     () =>
-      [...exercises].sort((a, b) =>
+      [...effectiveExercises].sort((a, b) =>
         tExercise(a).localeCompare(tExercise(b), 'pt-BR'),
       ),
-    [exercises],
+    [effectiveExercises],
   );
 
   const filtered = useMemo(() => {
@@ -74,7 +98,7 @@ export function Library() {
             </h2>
             <p className="text-on-surface-variant text-sm mt-1 font-body">
               {loaded
-                ? PT_BR.library.availableCount(exercises.length)
+                ? PT_BR.library.availableCount(effectiveExercises.length)
                 : PT_BR.common.loading}
             </p>
           </div>
@@ -147,6 +171,15 @@ export function Library() {
         <ExerciseDetailSheet
           exercise={detail}
           onClose={() => setDetailId(null)}
+          onDeleted={(id) => {
+            setDeletedIds((prev) => new Set(prev).add(id));
+            setOptimisticUpserts((prev) => {
+              if (!prev.has(id)) return prev;
+              const next = new Map(prev);
+              next.delete(id);
+              return next;
+            });
+          }}
           onEdit={(ex) => {
             setEditingExercise(ex);
             setDetailId(null);
@@ -158,6 +191,9 @@ export function Library() {
       {formOpen && (
         <ExerciseFormSheet
           editingExercise={editingExercise}
+          onSaved={(saved) =>
+            setOptimisticUpserts((prev) => new Map(prev).set(saved.id, saved))
+          }
           onClose={() => {
             setFormOpen(false);
             setEditingExercise(null);

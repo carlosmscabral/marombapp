@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Circle, Play, Trash2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Circle, Trash2 } from 'lucide-react';
 import { cn } from '../../components/Layout';
 import {
   addPlanDay,
@@ -20,7 +20,12 @@ import {
 import { PT_BR } from '../../lib/i18n/pt-BR';
 import type { Exercise, Plan as PlanT, PlanDay as PlanDayT } from '../../types';
 import { PlanDay } from '../PlanDay';
-import { AddDayRow, DayRow } from './DayRow';
+import {
+  AddDayRow,
+  applyOptimisticDayOrder,
+  DayRow,
+  StartWorkoutFab,
+} from './DayRow';
 
 export interface PlanDetailViewProps {
   plan: PlanT;
@@ -29,6 +34,7 @@ export interface PlanDetailViewProps {
   selectedDayId: string | null;
   onSelectDay: (id: string | null) => void;
   onActivatePlan?: (id: string) => void;
+  onDeletedPlan?: (id: string) => void;
   onBack: () => void;
 }
 
@@ -42,11 +48,13 @@ export function PlanDetailView({
   selectedDayId,
   onSelectDay,
   onActivatePlan,
+  onDeletedPlan,
   onBack,
 }: PlanDetailViewProps) {
   const navigate = useNavigate();
   const [days, setDays] = useState<PlanDayT[]>([]);
   const [optimisticDays, setOptimisticDays] = useState<PlanDayT[]>([]);
+  const [optimisticDayOrder, setOptimisticDayOrder] = useState<string[] | null>(null);
   const [deletedDayIds, setDeletedDayIds] = useState<ReadonlySet<string>>(() => new Set());
   const [optimisticActive, setOptimisticActive] = useState(false);
   const [name, setName] = useState(plan.name);
@@ -57,8 +65,10 @@ export function PlanDetailView({
   useEffect(() => {
     setDeletedDayIds(new Set());
     setOptimisticDays([]);
+    setOptimisticDayOrder(null);
     return subscribePlanDays(plan.id, (incoming) => {
       setDays(incoming);
+      setOptimisticDayOrder(null);
       const present = new Set(incoming.map((d) => d.id));
       setOptimisticDays((prev) => prev.filter((od) => !present.has(od.id)));
     });
@@ -88,7 +98,10 @@ export function PlanDetailView({
     return [...days, ...optimisticDays.filter((od) => !present.has(od.id))];
   }, [days, optimisticDays]);
 
-  const visibleDays = allDays.filter((d) => !deletedDayIds.has(d.id));
+  const visibleDays = applyOptimisticDayOrder(
+    allDays.filter((d) => !deletedDayIds.has(d.id)),
+    optimisticDayOrder,
+  );
   const selectedDay = visibleDays.find((d) => d.id === selectedDayId) ?? null;
   if (selectedDay) {
     return (
@@ -111,12 +124,14 @@ export function PlanDetailView({
     if (target < 0 || target >= visibleDays.length) return;
     const orderedIds = visibleDays.map((d) => d.id);
     [orderedIds[idx], orderedIds[target]] = [orderedIds[target], orderedIds[idx]];
+    setOptimisticDayOrder(orderedIds);
     await reorderPlanDays(plan.id, orderedIds).catch(() => {});
   };
 
   const handleDeleteDay = (day: PlanDayT) => {
     if (!confirm(PT_BR.plan.confirmDeleteDay(day.name))) return;
     setDeletedDayIds((prev) => new Set(prev).add(day.id));
+    setOptimisticDays((prev) => prev.filter((od) => od.id !== day.id));
     void deletePlanDay(plan.id, day.id).catch(() => {});
   };
 
@@ -124,6 +139,7 @@ export function PlanDetailView({
     const displayName = name.trim() || plan.name;
     if (!confirm(PT_BR.plan.confirmDeletePlan(displayName))) return;
     debouncedRename.cancel();
+    onDeletedPlan?.(plan.id);
     void deletePlan(
       plan.id,
       allDays.map((d) => d.id),
@@ -270,16 +286,7 @@ export function PlanDetailView({
       </section>
 
       {isActive && visibleDays.length > 0 && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40">
-          <button
-            type="button"
-            onClick={() => navigate('/start')}
-            className="flex items-center gap-2 bg-gradient-to-br from-primary to-primary-container text-on-primary-fixed font-headline font-semibold px-6 py-3 rounded-full shadow-[0_16px_32px_rgba(106,178,255,0.15)] ring-4 ring-background"
-          >
-            <Play className="w-5 h-5 fill-on-primary-fixed" />
-            {PT_BR.plan.startWorkoutFab}
-          </button>
-        </div>
+        <StartWorkoutFab onClick={() => navigate('/start')} />
       )}
     </div>
   );

@@ -25,6 +25,7 @@ export function createTestContainer(): MinimalElement {
   const doc: Record<string, unknown> = {
     nodeType: 9,
     documentElement: { style: {} },
+    body: { style: {} },
     createElement: (tag: string) => makeEl(tag),
     createElementNS: (_ns: string, tag: string) => makeEl(tag),
     createTextNode: (text: string) => ({
@@ -57,6 +58,7 @@ export function createTestContainer(): MinimalElement {
         delete (this.attributes as Record<string, string>)[k];
       },
       appendChild(child: MinimalElement) {
+        this.childNodes = this.childNodes.filter((x) => x !== child);
         this.childNodes.push(child);
         child.parentNode = this;
         return child;
@@ -66,11 +68,17 @@ export function createTestContainer(): MinimalElement {
         return child;
       },
       insertBefore(child: MinimalElement, before: MinimalElement | null) {
+        this.childNodes = this.childNodes.filter((x) => x !== child);
         const idx = before ? this.childNodes.indexOf(before) : -1;
         if (idx === -1) this.childNodes.push(child);
         else this.childNodes.splice(idx, 0, child);
         child.parentNode = this;
         return child;
+      },
+      get options(): MinimalElement[] {
+        return (this.childNodes as MinimalElement[]).filter(
+          (c) => c.nodeType === 1 && c.tagName === 'OPTION',
+        );
       },
       get textContent(): string {
         return this.childNodes
@@ -89,37 +97,42 @@ export function createTestContainer(): MinimalElement {
 
   (globalThis as Record<string, unknown>).window = globalThis;
   (globalThis as Record<string, unknown>).document = doc;
+  (globalThis as Record<string, unknown>).addEventListener = noop;
+  (globalThis as Record<string, unknown>).removeEventListener = noop;
   return makeEl('div');
+}
+
+/**
+ * Returns every descendant matching `tagName` (case-insensitive) under `rootEl` in document order.
+ */
+export function findElementsByTag(
+  rootEl: MinimalElement,
+  tagName: string,
+): MinimalElement[] {
+  const target = tagName.toUpperCase();
+  const out: MinimalElement[] = [];
+  function walk(node: MinimalElement) {
+    if (node.tagName === target) out.push(node);
+    for (const child of node.childNodes) {
+      if (child.nodeType === 1) walk(child as MinimalElement);
+    }
+  }
+  walk(rootEl);
+  return out;
 }
 
 /**
  * Returns every `<button>` descendant under `rootEl` in document order.
  */
 export function findButtons(rootEl: MinimalElement): MinimalElement[] {
-  const out: MinimalElement[] = [];
-  function walk(node: MinimalElement) {
-    if (node.tagName === 'BUTTON') out.push(node);
-    for (const child of node.childNodes) {
-      if (child.nodeType === 1) walk(child as MinimalElement);
-    }
-  }
-  walk(rootEl);
-  return out;
+  return findElementsByTag(rootEl, 'BUTTON');
 }
 
 /**
  * Returns every `<input>` descendant under `rootEl` in document order.
  */
 export function findInputs(rootEl: MinimalElement): MinimalElement[] {
-  const out: MinimalElement[] = [];
-  function walk(node: MinimalElement) {
-    if (node.tagName === 'INPUT') out.push(node);
-    for (const child of node.childNodes) {
-      if (child.nodeType === 1) walk(child as MinimalElement);
-    }
-  }
-  walk(rootEl);
-  return out;
+  return findElementsByTag(rootEl, 'INPUT');
 }
 
 /**
@@ -128,8 +141,11 @@ export function findInputs(rootEl: MinimalElement): MinimalElement[] {
 export function getReactProps(el: MinimalElement): {
   onClick?: (e: { stopPropagation: () => void }) => void;
   onChange?: (e: { target: { value: string } }) => void;
+  onKeyDown?: (e: { key: string }) => void;
+  onSubmit?: (e: { preventDefault: () => void }) => void;
   onFocus?: () => void;
   onBlur?: () => void;
+  disabled?: boolean;
   placeholder?: string;
   value?: string;
   'aria-label'?: string;

@@ -1,10 +1,14 @@
 /**
  * Training plans route (`/plan`).
- * Coordinates Firestore plan/library subscriptions, optimistic active-plan state, and switching between `PlanListView` and `PlanDetailView`.
+ * Coordinates Firestore plan/library subscriptions, optimistic plan creation/activation, and switching between `PlanListView` and `PlanDetailView`.
  */
 
-import { useEffect, useMemo, useState } from 'react';
-import { subscribeAllPlans, subscribeLibrary } from '../lib/db';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  isPlanPendingDelete,
+  subscribeAllPlans,
+  subscribeLibrary,
+} from '../lib/db';
 import type { Exercise, Plan as PlanT } from '../types';
 import { PlanDetailView } from './plan/PlanDetailView';
 import { PlanListView } from './plan/PlanListView';
@@ -14,6 +18,8 @@ import { PlanListView } from './plan/PlanListView';
  */
 export function Plan() {
   const [plans, setPlans] = useState<PlanT[]>([]);
+  const snapshotIdsRef = useRef<Set<string>>(new Set());
+  const [optimisticPlans, setOptimisticPlans] = useState<PlanT[]>([]);
   const [optimisticActiveId, setOptimisticActiveId] = useState<string | null>(null);
   const [library, setLibrary] = useState<Exercise[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
@@ -22,19 +28,34 @@ export function Plan() {
   useEffect(
     () =>
       subscribeAllPlans((next) => {
+        const present = new Set(next.map((p) => p.id));
+        snapshotIdsRef.current = present;
         setPlans(next);
+        setOptimisticPlans((prev) => prev.filter((op) => !present.has(op.id)));
         setOptimisticActiveId(null);
       }),
     [],
   );
   useEffect(() => subscribeLibrary(setLibrary), []);
 
+  const removeOptimisticPlan = useCallback((id: string) => {
+    setOptimisticPlans((prev) => prev.filter((op) => op.id !== id));
+  }, []);
+
+  const allPlans = useMemo(() => {
+    const present = new Set(plans.map((p) => p.id));
+    const pendingCreated = optimisticPlans.filter(
+      (op) => !present.has(op.id) && !isPlanPendingDelete(op.id),
+    );
+    return [...pendingCreated, ...plans];
+  }, [plans, optimisticPlans]);
+
   const effectivePlans = useMemo(
     () =>
-      optimisticActiveId && plans.some((p) => p.id === optimisticActiveId)
-        ? plans.map((p) => ({ ...p, active: p.id === optimisticActiveId }))
-        : plans,
-    [plans, optimisticActiveId],
+      optimisticActiveId && allPlans.some((p) => p.id === optimisticActiveId)
+        ? allPlans.map((p) => ({ ...p, active: p.id === optimisticActiveId }))
+        : allPlans,
+    [allPlans, optimisticActiveId],
   );
 
   useEffect(() => {
@@ -59,6 +80,7 @@ export function Plan() {
         selectedDayId={selectedDayId}
         onSelectDay={setSelectedDayId}
         onActivatePlan={setOptimisticActiveId}
+        onDeletedPlan={removeOptimisticPlan}
         onBack={() => {
           setSelectedPlanId(null);
           setSelectedDayId(null);
@@ -72,6 +94,11 @@ export function Plan() {
       plans={effectivePlans}
       onOpen={setSelectedPlanId}
       onActivatePlan={setOptimisticActiveId}
+      onRemovedPlan={removeOptimisticPlan}
+      onCreatedPlan={(created) => {
+        if (snapshotIdsRef.current.has(created.id)) return;
+        setOptimisticPlans((prev) => [created, ...prev]);
+      }}
     />
   );
 }

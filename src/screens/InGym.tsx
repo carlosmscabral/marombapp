@@ -107,7 +107,7 @@ function ActiveSessionView({ session }: { session: Session }) {
   useEffect(() => {
     const flush = () => {
       writeSessionNotes.flush();
-      void flushPendingWrites();
+      void flushPendingWrites().catch(() => {});
     };
     const onVis = () => {
       if (document.visibilityState === 'hidden') flush();
@@ -143,7 +143,6 @@ function ActiveSessionView({ session }: { session: Session }) {
     if (!confirm(PT_BR.inGym.confirmFinish)) return;
     clearRest();
     writeSessionNotes.flush();
-    await flushPendingWrites();
     await finishSession(sessionId);
     navigate(`/sessions/${sessionId}`);
   }, [sessionId, writeSessionNotes, navigate, clearRest]);
@@ -152,7 +151,6 @@ function ActiveSessionView({ session }: { session: Session }) {
     if (!confirm(PT_BR.inGym.confirmAbandon)) return;
     clearRest();
     writeSessionNotes.flush();
-    await flushPendingWrites();
     await abandonSession(sessionId);
   }, [sessionId, writeSessionNotes, clearRest]);
 

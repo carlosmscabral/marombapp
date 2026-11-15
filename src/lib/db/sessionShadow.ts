@@ -65,6 +65,17 @@ export function clearShadow(sessionId: string): void {
   mutationQueues.delete(sessionId);
 }
 
+/**
+ * Waits for any in-flight local shadow read-modify-write steps on `sessionId` to enqueue their local `updateDoc` calls.
+ * Never awaits server acknowledgment, so finishing or abandoning a workout offline never stalls.
+ */
+export async function drainShadowQueue(sessionId: string): Promise<void> {
+  const pending = mutationQueues.get(sessionId);
+  if (pending) {
+    await pending;
+  }
+}
+
 async function ensureShadow(sessionId: string): Promise<SessionExercise[] | null> {
   const existing = exercisesShadow.get(sessionId);
   if (existing) return existing;
@@ -98,23 +109,22 @@ export function mutateSessionExercises(
   mutator: (current: SessionExercise[]) => SessionExercise[] | null,
 ): Promise<void> {
   const previous = mutationQueues.get(sessionId) ?? Promise.resolve();
-  const rmwStep = previous.then(async (): Promise<{ write: Promise<void> | null }> => {
+  const rmwStep = previous.then(async (): Promise<void> => {
     const current = await ensureShadow(sessionId);
-    if (!current) return { write: null };
+    if (!current) return;
     const latest = exercisesShadow.get(sessionId) ?? current;
     const next = mutator(cloneExercises(latest));
-    if (!next) return { write: null };
+    if (!next) return;
     exercisesShadow.set(sessionId, next);
-    return { write: updateDoc(sessionDoc(sessionId), { exercises: next }) };
+    void updateDoc(sessionDoc(sessionId), { exercises: next }).catch(() => {});
   });
   const tracked = rmwStep
     .catch(() => undefined)
-    .then(() => undefined)
     .finally(() => {
       if (mutationQueues.get(sessionId) === tracked) {
         mutationQueues.delete(sessionId);
       }
     });
   mutationQueues.set(sessionId, tracked);
-  return rmwStep.then((res) => res.write ?? undefined);
+  return rmwStep;
 }

@@ -4,7 +4,6 @@
  */
 
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -116,15 +115,17 @@ export function subscribePlanDays(
 }
 
 /**
- * Creates a new inactive training plan and returns its document id.
+ * Creates a new inactive training plan with a client-generated ID and queues `setDoc` without awaiting server acknowledgment.
  */
 export function createPlan(name: string): Promise<string> {
-  return addDoc(plansCol(), {
+  const ref = doc(plansCol());
+  void setDoc(ref, {
     name,
     active: false,
     createdAt: serverTimestamp(),
     archivedAt: null,
-  }).then((ref) => ref.id);
+  }).catch(() => {});
+  return Promise.resolve(ref.id);
 }
 
 /**
@@ -168,20 +169,22 @@ export async function setActivePlan(
 }
 
 /**
- * Updates the display name of `planId`.
+ * Queues a display-name update for `planId` without awaiting server acknowledgment.
  */
-export async function renamePlan(planId: string, name: string): Promise<void> {
-  await updateDoc(planDoc(planId), { name });
+export function renamePlan(planId: string, name: string): Promise<void> {
+  void updateDoc(planDoc(planId), { name }).catch(() => {});
+  return Promise.resolve();
 }
 
 /**
- * Soft-deletes `planId` by stamping `archivedAt` and clearing `active`.
+ * Soft-deletes `planId` by stamping `archivedAt` and clearing `active` without awaiting server acknowledgment.
  */
-export async function archivePlan(planId: string): Promise<void> {
-  await updateDoc(planDoc(planId), {
+export function archivePlan(planId: string): Promise<void> {
+  void updateDoc(planDoc(planId), {
     archivedAt: Date.now(),
     active: false,
-  });
+  }).catch(() => {});
+  return Promise.resolve();
 }
 
 /**
@@ -246,14 +249,15 @@ export async function addPlanDay(
 }
 
 /**
- * Renames a training day within `planId`.
+ * Renames a training day within `planId` without awaiting server acknowledgment.
  */
-export async function renamePlanDay(
+export function renamePlanDay(
   planId: string,
   dayId: string,
   name: string,
 ): Promise<void> {
-  await updateDoc(dayDoc(planId, dayId), { name });
+  void updateDoc(dayDoc(planId, dayId), { name }).catch(() => {});
+  return Promise.resolve();
 }
 
 /**
@@ -265,9 +269,9 @@ export function deletePlanDay(planId: string, dayId: string): Promise<void> {
 }
 
 /**
- * Updates the `order` field of every day in `planId` to match `orderedIds`.
+ * Queues `order` updates for every day in `planId` to match `orderedIds` without awaiting server acknowledgment.
  */
-export async function reorderPlanDays(
+export function reorderPlanDays(
   planId: string,
   orderedIds: string[],
 ): Promise<void> {
@@ -275,7 +279,8 @@ export async function reorderPlanDays(
   orderedIds.forEach((id, idx) => {
     batch.update(dayDoc(planId, id), { order: idx });
   });
-  await batch.commit();
+  void batch.commit().catch(() => {});
+  return Promise.resolve();
 }
 
 /**
