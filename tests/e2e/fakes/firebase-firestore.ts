@@ -96,6 +96,14 @@ export async function getDocs(q: CollectionReference | Query) {
   return querySnap(q.path, q.kind === 'query' ? q.constraints : []);
 }
 export const getDocsFromCache = getDocs;
+export async function getDocsFromServer(q: CollectionReference | Query) {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    throw Object.assign(new Error('Failed to get documents from server.'), {
+      code: 'unavailable',
+    });
+  }
+  return querySnap(q.path, q.kind === 'query' ? q.constraints : []);
+}
 
 export async function addDoc(col: CollectionReference, data: DocData): Promise<DocumentReference> {
   const ref = doc(col);

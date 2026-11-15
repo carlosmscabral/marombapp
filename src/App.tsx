@@ -29,10 +29,8 @@ function RouteLoader() {
 
 function AuthedApp() {
   useEffect(() => {
-    // Seed runs once on empty projects and acts as a no-op thereafter.
-    seedLibraryIfEmpty().catch((err) => {
-      console.warn('Library seed skipped:', err);
-    });
+    // Seed runs fire-and-forget only when the server confirms an empty project.
+    void seedLibraryIfEmpty().catch(() => undefined);
   }, []);
 
   return (

@@ -1,9 +1,18 @@
 /**
- * Initial exercise encyclopedia seeder.
- * Populates the `exercises` collection once when the user signs in to an empty project.
+ * Initial exercise encyclopedia seeder (#22, REQ-001, REQ-002, REQ-004, ADR-005).
+ * Queries the Firestore server authoritatively (`getDocsFromServer`) with a bounded timeout,
+ * skips silently when offline or served from cache, and writes deterministic document IDs
+ * without awaiting commit acknowledgement so multi-tab launches never duplicate exercises.
  */
 
-import { collection, getDocs, limit, query, writeBatch, doc } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDocsFromServer,
+  limit,
+  query,
+  writeBatch,
+} from 'firebase/firestore';
 import { getFirestoreDb } from './firebase';
 import type { Exercise, MuscleGroup } from '../types';
 
@@ -11,6 +20,8 @@ export interface SeedItem {
   name: string;
   primaryMuscle: MuscleGroup;
 }
+
+export const SEED_SERVER_CHECK_TIMEOUT_MS = 5_000;
 
 export const SEED_EXERCISES: readonly SeedItem[] = [
   // Chest (6)
@@ -93,24 +104,74 @@ export const SEED_EXERCISES: readonly SeedItem[] = [
 ];
 
 /**
- * Seeds the default 66 exercises if the `exercises` collection has zero documents.
+ * Derives a deterministic, lowercase ASCII slug ID from a canonical English seed exercise name.
  */
-export async function seedLibraryIfEmpty(): Promise<void> {
-  const db = getFirestoreDb();
-  const col = collection(db, 'exercises');
-  const snap = await getDocs(query(col, limit(1)));
-  if (!snap.empty) return;
+export function seedExerciseId(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/['’]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
 
-  const batch = writeBatch(db);
-  for (const item of SEED_EXERCISES) {
-    const ref = doc(col);
-    const payload: Omit<Exercise, 'id'> = {
-      name: item.name,
-      primaryMuscle: item.primaryMuscle,
-      isCustom: false,
-      notes: '',
-    };
-    batch.set(ref, payload);
+/**
+ * Races `promise` against a bounded timeout, clearing the timer on settlement and absorbing
+ * late rejections after timeout so hanging network checks never leak unhandled rejections.
+ */
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
+  promise.catch(() => undefined);
+  let timerId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<null>((resolve) => {
+    timerId = setTimeout(() => resolve(null), timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timerId !== undefined) {
+      clearTimeout(timerId);
+    }
   }
-  await batch.commit();
+}
+
+let inFlightSeed: Promise<void> | null = null;
+
+async function runSeedLibraryIfEmpty(timeoutMs: number): Promise<void> {
+  try {
+    const db = getFirestoreDb();
+    const col = collection(db, 'exercises');
+    const snap = await withTimeout(getDocsFromServer(query(col, limit(1))), timeoutMs);
+    if (!snap || snap.metadata?.fromCache === true || !snap.empty) {
+      return;
+    }
+
+    const batch = writeBatch(db);
+    for (const item of SEED_EXERCISES) {
+      const ref = doc(col, seedExerciseId(item.name));
+      const payload: Omit<Exercise, 'id'> = {
+        name: item.name,
+        primaryMuscle: item.primaryMuscle,
+        isCustom: false,
+        notes: '',
+      };
+      batch.set(ref, payload);
+    }
+    void batch.commit().catch(() => undefined);
+  } catch {
+    /* Skip silently when offline, unavailable, or timed out so cached/server data stays intact. */
+  }
+}
+
+/**
+ * Seeds the default 66 exercises only when the Firestore server confirms `exercises` has zero documents.
+ */
+export function seedLibraryIfEmpty(
+  timeoutMs: number = SEED_SERVER_CHECK_TIMEOUT_MS,
+): Promise<void> {
+  if (!inFlightSeed) {
+    inFlightSeed = runSeedLibraryIfEmpty(timeoutMs).finally(() => {
+      inFlightSeed = null;
+    });
+  }
+  return inFlightSeed;
 }
