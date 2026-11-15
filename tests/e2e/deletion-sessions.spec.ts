@@ -82,6 +82,27 @@ test('deletes a finished session from SessionDetail and removes it from Analytic
   await expectTouchTarget(page.getByRole('button', { name: 'Abandon' }));
 });
 
+test('hides Delete session when an active session is opened directly via /sessions/:sessionId', async ({
+  page,
+}) => {
+  await boot(page, {
+    signedIn: true,
+    path: '/sessions/w-active',
+    docs: {
+      ...libraryDocs(),
+      ...completedSession('w-active', 0, [sx('ex-bench', [done(60, 8)])], {
+        status: 'active',
+        finishedAt: null,
+        dayName: 'Active Push',
+      }),
+    },
+  });
+
+  await expect(page.getByText('Session • active')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Active Push', level: 1 })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Delete session' })).toHaveCount(0);
+});
+
 test('finished sessions whose plan or day was deleted still render in Analytics, SessionDetail, and In-Gym last-3', async ({
   page,
 }) => {

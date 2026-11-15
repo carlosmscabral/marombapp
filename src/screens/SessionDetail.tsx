@@ -87,6 +87,7 @@ export function SessionDetail() {
   }
 
   const handleDeleteSession = async () => {
+    if (session.status === 'active') return;
     const label = session.dayName || 'Session';
     if (!confirm(`Delete session "${label}"? This cannot be undone.`)) return;
     await deleteSession(session.id).catch(() => {});
@@ -103,14 +104,16 @@ export function SessionDetail() {
           <ArrowLeft className="w-4 h-4" />
           Back
         </Link>
-        <button
-          type="button"
-          onClick={() => void handleDeleteSession()}
-          className="min-h-11 px-3.5 rounded-xl bg-secondary/15 text-secondary border border-secondary/30 font-label text-xs uppercase tracking-widest font-semibold hover:bg-secondary/25 transition-colors inline-flex items-center gap-1.5"
-        >
-          <Trash2 className="w-4 h-4" />
-          Delete session
-        </button>
+        {session.status !== 'active' && (
+          <button
+            type="button"
+            onClick={() => void handleDeleteSession()}
+            className="min-h-11 px-3.5 rounded-xl bg-secondary/15 text-secondary border border-secondary/30 font-label text-xs uppercase tracking-widest font-semibold hover:bg-secondary/25 transition-colors inline-flex items-center gap-1.5"
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete session
+          </button>
+        )}
       </div>
 
       <header className="space-y-2">
