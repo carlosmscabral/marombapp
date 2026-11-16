@@ -1,17 +1,18 @@
 /**
- * Unit tests for the pre-apply post-cutover data-loss guard in `scripts/migrate/target-guard.mjs` (#15, ADR-005).
- * Proves each guard branch blocks `--apply` with zero mutations while allowing pre-cutover leftovers.
+ * Unit tests for the pre-apply post-cutover data-loss guard in `scripts/migrate/target-guard.mjs` (#15, #23, ADR-005).
+ * Proves each guard branch blocks `--apply` with zero mutations while allowing pre-cutover leftovers on unmigrated DBs.
  */
 
 import { describe, expect, it } from 'vitest';
 import {
+  POST_CUTOVER_OVERWRITE_FLAG,
   formatMigrationReport,
   parseCliArgs,
   runCopyMigration,
 } from '../../scripts/migrate/copy-default-to-marombapp.mjs';
 import { InMemoryFirestore } from './support/inMemoryFirestore';
 
-describe('copy-default-to-marombapp pre-apply guard (#15, ADR-005)', () => {
+describe('copy-default-to-marombapp pre-apply guard (#15, #23, ADR-005)', () => {
   function makeBaseSource() {
     return new InMemoryFirestore('(default)', {
       'exercises/ex-1': { name: 'Squat', isCustom: false },
@@ -21,15 +22,23 @@ describe('copy-default-to-marombapp pre-apply guard (#15, ADR-005)', () => {
     });
   }
 
-  it('parses --force-purge-target-sessions flags and rejects empty ID lists', () => {
-    expect(parseCliArgs(['--apply', '--force-purge-target-sessions'])).toMatchObject({
+  it('parses --force-purge-target-sessions flags with post-cutover override and rejects empty ID lists', () => {
+    expect(
+      parseCliArgs(['--apply', POST_CUTOVER_OVERWRITE_FLAG, '--force-purge-target-sessions']),
+    ).toMatchObject({
       dryRun: false,
+      overwriteLiveDataAfterCutover: true,
       forcePurgeTargetSessions: true,
     });
     expect(
-      parseCliArgs(['--apply', '--force-purge-target-sessions=s1,s2']),
+      parseCliArgs([
+        '--apply',
+        POST_CUTOVER_OVERWRITE_FLAG,
+        '--force-purge-target-sessions=s1,s2',
+      ]),
     ).toMatchObject({
       dryRun: false,
+      overwriteLiveDataAfterCutover: true,
       forcePurgeTargetSessions: ['s1', 's2'],
     });
     expect(() => parseCliArgs(['--force-purge-target-sessions='])).toThrow(
@@ -40,7 +49,9 @@ describe('copy-default-to-marombapp pre-apply guard (#15, ADR-005)', () => {
   it('blocks --apply with 0 deletes and 0 writes on target-only sessions unless overridden', async () => {
     const source = makeBaseSource();
     const target = new InMemoryFirestore('marombapp', {
-      'exercises/seed-1': { name: 'Squat', isCustom: false },
+      'exercises/ex-1': { name: 'Squat', isCustom: false },
+      'plans/plan-src': { name: 'Legacy Plan', active: true },
+      'plans/plan-src/days/day-1': { name: 'Leg Day', order: 0 },
       'sessions/sess-src': { status: 'completed', startedAt: 1000 },
       'sessions/post-cutover-workout': { status: 'completed', startedAt: 2000 },
     });
@@ -56,7 +67,12 @@ describe('copy-default-to-marombapp pre-apply guard (#15, ADR-005)', () => {
     );
 
     await expect(
-      runCopyMigration({ sourceDb: source, targetDb: target, dryRun: false }),
+      runCopyMigration({
+        sourceDb: source,
+        targetDb: target,
+        dryRun: false,
+        overwriteLiveDataAfterCutover: true,
+      }),
     ).rejects.toThrow(/sessions=\[post-cutover-workout\]/);
 
     await expect(
@@ -64,6 +80,7 @@ describe('copy-default-to-marombapp pre-apply guard (#15, ADR-005)', () => {
         sourceDb: source,
         targetDb: target,
         dryRun: false,
+        overwriteLiveDataAfterCutover: true,
         forcePurgeTargetSessions: ['other-id'],
       }),
     ).rejects.toThrow(/sessions=\[post-cutover-workout\]/);
@@ -80,6 +97,7 @@ describe('copy-default-to-marombapp pre-apply guard (#15, ADR-005)', () => {
       sourceDb: source,
       targetDb: target,
       dryRun: false,
+      overwriteLiveDataAfterCutover: true,
       forcePurgeTargetSessions: ['post-cutover-workout'],
     });
     expect(forced.purgedTargetOnlySessionIds).toEqual(['post-cutover-workout']);
@@ -108,6 +126,7 @@ describe('copy-default-to-marombapp pre-apply guard (#15, ADR-005)', () => {
         sourceDb: source,
         targetDb: target,
         dryRun: false,
+        overwriteLiveDataAfterCutover: true,
         forcePurgeTargetSessions: true,
       }),
     ).rejects.toThrow(/customExercises=\[custom-new\]/);
@@ -143,6 +162,7 @@ describe('copy-default-to-marombapp pre-apply guard (#15, ADR-005)', () => {
         sourceDb: source,
         targetDb: target,
         dryRun: false,
+        overwriteLiveDataAfterCutover: true,
         forcePurgeTargetSessions: true,
       }),
     ).rejects.toThrow(/nonEmptyPlans=\[new-plan\]/);

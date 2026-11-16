@@ -19,16 +19,19 @@ import {
 import { InMemoryFirestore } from './support/inMemoryFirestore';
 
 describe('copy-default-to-marombapp core migration (#15, ADR-004, ADR-005)', () => {
-  it('defaults CLI parsing to --dry-run and rejects (default), default, or invalid flags', () => {
+  it('defaults CLI parsing to --dry-run and rejects (default), default, or unauthorized --apply', () => {
     expect(parseCliArgs([])).toEqual({
       dryRun: true,
+      overwriteLiveDataAfterCutover: false,
       projectId: 'vibe-cabral',
       targetDatabaseId: 'marombapp',
       batchSize: MAX_BATCH_SIZE,
       forcePurgeTargetSessions: false,
     });
-    expect(parseCliArgs(['--apply'])).toMatchObject({
+    expect(() => parseCliArgs(['--apply'])).toThrow(/retired|--overwrite-live-data-after-cutover/i);
+    expect(parseCliArgs(['--apply', '--overwrite-live-data-after-cutover'])).toMatchObject({
       dryRun: false,
+      overwriteLiveDataAfterCutover: true,
       targetDatabaseId: 'marombapp',
     });
     expect(() => parseCliArgs(['--dry-run', '--apply'])).toThrow(/Cannot combine/);
@@ -200,6 +203,7 @@ describe('copy-default-to-marombapp core migration (#15, ADR-004, ADR-005)', () 
       sourceDb: source,
       targetDb: target,
       dryRun: false,
+      overwriteLiveDataAfterCutover: true,
       batchSize: 2,
     });
 
@@ -240,20 +244,15 @@ describe('copy-default-to-marombapp core migration (#15, ADR-004, ADR-005)', () 
       startedAt: 1_715_000_000_000,
     });
 
-    source.seed('sessions/sess-11', {
-      planId: 'plan-real',
-      status: 'completed',
-      startedAt: 1_715_100_000_000,
-      finishedAt: 1_715_103_000_000,
-    });
     const rerun = await runCopyMigration({
       sourceDb: source,
       targetDb: target,
       dryRun: false,
+      overwriteLiveDataAfterCutover: true,
     });
     expect(rerun.verification.verified).toBe(true);
     expect(rerun.verification.targetEqualsSource).toBe(true);
-    expect(target.size()).toBe(9);
+    expect(target.size()).toBe(8);
     expect(target.readRaw('eval_runs/eval-001')).toEqual({
       run_id: 'eval-001',
       overall_status: 'PASS',

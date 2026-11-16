@@ -1,9 +1,14 @@
 /**
- * Safety guards and report formatter for the `(default)` to `marombapp` Firestore migration (#15, ADR-004, ADR-005).
- * Enforces target DB refusal, strict allowlisting, and pre-apply protection against post-cutover data loss.
+ * Safety guards and report formatter for the retired `(default)` to `marombapp` migration (#15, #23, ADR-004, ADR-005).
+ * Enforces post-cutover `--apply` refusal, target DB checks, strict allowlisting, and edit/delete diff guards.
  */
 
+import { areFirestoreDocsEqual, computeSourceTargetDiffs } from './firestore-diff.mjs';
+
+export { areFirestoreDocsEqual };
+
 export const DEFAULT_SOURCE_DB = '(default)';
+export const POST_CUTOVER_OVERWRITE_FLAG = '--overwrite-live-data-after-cutover';
 export const ALLOWLIST_TOP_COLLECTIONS = Object.freeze(['exercises', 'plans', 'sessions']);
 export const COLLECTION_KEYS = Object.freeze([
   'exercises',
@@ -11,6 +16,22 @@ export const COLLECTION_KEYS = Object.freeze([
   'plans/*/days',
   'sessions',
 ]);
+
+/**
+ * Refuses `--apply` after the 2026-11-16 cutover unless the explicit PO-decision override flag is supplied.
+ */
+export function assertPostCutoverApplyAuthorized(
+  dryRun,
+  overwriteLiveDataAfterCutover,
+  targetDatabaseId,
+) {
+  if (!dryRun && overwriteLiveDataAfterCutover !== true) {
+    throw new Error(
+      `Refusing --apply: tool is RETIRED after the 2026-11-16 cutover (#15). ` +
+        `"${targetDatabaseId}" is authoritative. Any re-run needs a new PO decision (${POST_CUTOVER_OVERWRITE_FLAG}).`,
+    );
+  }
+}
 
 /**
  * Validates that the target database is a named Firestore database and never `(default)` or `default`.
@@ -82,8 +103,8 @@ export function assertAllowlistedDocPath(docPath) {
 }
 
 /**
- * Evaluates whether `marombapp` holds post-cutover user data absent from `(default)` before purging.
- * Seeded built-in exercises (`isCustom: false`) and empty 0-day test plans remain purgeable.
+ * Evaluates whether `marombapp` holds post-cutover additions, in-place edits, or deletions vs `(default)`.
+ * Seeded built-in exercises (`isCustom: false`) and empty 0-day test plans on an unmigrated DB remain purgeable.
  */
 export function evaluateTargetGuard(
   sourceScan,
@@ -126,6 +147,12 @@ export function evaluateTargetGuard(
   }
   const nonEmptyPlans = [...nonEmptyPlanSet].sort();
 
+  const { editedDocs, deletedDocs } = computeSourceTargetDiffs(
+    sourceScan,
+    beforeScan,
+    COLLECTION_KEYS,
+  );
+
   const reasons = [];
   if (blockedSessions.length > 0) {
     reasons.push(`sessions=[${blockedSessions.join(', ')}]`);
@@ -136,6 +163,12 @@ export function evaluateTargetGuard(
   if (nonEmptyPlans.length > 0) {
     reasons.push(`nonEmptyPlans=[${nonEmptyPlans.join(', ')}]`);
   }
+  if (editedDocs.length > 0) {
+    reasons.push(`editedDocs=[${editedDocs.join(', ')}]`);
+  }
+  if (deletedDocs.length > 0) {
+    reasons.push(`deletedDocs=[${deletedDocs.join(', ')}]`);
+  }
 
   return {
     blocked: reasons.length > 0,
@@ -144,11 +177,13 @@ export function evaluateTargetGuard(
     forcedSessions,
     customExercises,
     nonEmptyPlans,
+    editedDocs,
+    deletedDocs,
   };
 }
 
 /**
- * Formats a human-readable per-collection summary, guard status, and source-vs-target verification table.
+ * Formats a human-readable per-collection summary, edited/deleted diff report, and guard status.
  */
 export function formatMigrationReport(report) {
   const delLabel = report.dryRun ? 'wouldDelete' : 'deleted';
@@ -177,12 +212,8 @@ export function formatMigrationReport(report) {
   for (const row of report.collections) {
     const delVal = report.dryRun ? row.wouldDelete : row.deleted;
     const wrVal = report.dryRun ? row.wouldWrite : row.written;
-    const eqText =
-      row.countsMatch && row.idsMatch
-        ? 'YES'
-        : report.dryRun
-          ? 'NO (dry-run)'
-          : 'MISMATCH';
+    const isExactMatch = row.countsMatch && row.idsMatch && (row.docsMatch ?? true);
+    const eqText = isExactMatch ? 'YES' : report.dryRun ? 'NO (dry-run)' : 'MISMATCH';
 
     lines.push(
       [
@@ -202,6 +233,12 @@ export function formatMigrationReport(report) {
     lines.push(
       `Purged target-only sessions (--force-purge-target-sessions): ${purgedList}`,
     );
+  }
+  if (report.guard?.editedDocs?.length > 0) {
+    lines.push(`Diff (edited in target): ${report.guard.editedDocs.join(', ')}`);
+  }
+  if (report.guard?.deletedDocs?.length > 0) {
+    lines.push(`Diff (deleted in target): ${report.guard.deletedDocs.join(', ')}`);
   }
   if (report.guard?.blocked) {
     lines.push(`GUARD WOULD BLOCK --apply: ${report.guard.reasons.join('; ')}`);

@@ -1,112 +1,46 @@
 /**
- * One-off idempotent Firestore migration tool copying MarombApp data from `(default)` into `marombapp`.
- * Wraps `(default)` read-only, runs `target-guard` before any purge, spares `eval_runs`, and defaults to `--dry-run`.
+ * Retired one-off Firestore migration tool from `(default)` into `marombapp` (#15, #23, ADR-004, ADR-005).
+ * Defaults to read-only `--dry-run` diff inspection and refuses `--apply` after cutover without explicit authorization.
  */
 
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { applicationDefault, deleteApp, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { createReadOnlySource, scanAllowlistedDatabase } from './read-only-scanner.mjs';
 import {
-  ALLOWLIST_TOP_COLLECTIONS, COLLECTION_KEYS, DEFAULT_SOURCE_DB,
-  assertAllowlistedCollectionPath, assertAllowlistedDocPath, assertSafeTargetDatabase,
-  evaluateTargetGuard, formatMigrationReport,
+  ALLOWLIST_TOP_COLLECTIONS,
+  COLLECTION_KEYS,
+  DEFAULT_SOURCE_DB,
+  POST_CUTOVER_OVERWRITE_FLAG,
+  areFirestoreDocsEqual,
+  assertAllowlistedCollectionPath,
+  assertAllowlistedDocPath,
+  assertPostCutoverApplyAuthorized,
+  assertSafeTargetDatabase,
+  evaluateTargetGuard,
+  formatMigrationReport,
 } from './target-guard.mjs';
 
 export {
-  ALLOWLIST_TOP_COLLECTIONS, COLLECTION_KEYS, DEFAULT_SOURCE_DB,
-  assertAllowlistedCollectionPath, assertAllowlistedDocPath, assertSafeTargetDatabase,
-  evaluateTargetGuard, formatMigrationReport,
+  ALLOWLIST_TOP_COLLECTIONS,
+  COLLECTION_KEYS,
+  DEFAULT_SOURCE_DB,
+  POST_CUTOVER_OVERWRITE_FLAG,
+  areFirestoreDocsEqual,
+  assertAllowlistedCollectionPath,
+  assertAllowlistedDocPath,
+  assertPostCutoverApplyAuthorized,
+  assertSafeTargetDatabase,
+  createReadOnlySource,
+  evaluateTargetGuard,
+  formatMigrationReport,
+  scanAllowlistedDatabase,
 };
 
 export const DEFAULT_PROJECT_ID = 'vibe-cabral';
 export const DEFAULT_TARGET_DB = 'marombapp';
 export const MAX_BATCH_SIZE = 400;
-
-/**
- * Wraps a Firestore handle in a frozen read-only facade restricted to allowlisted MarombApp collections.
- */
-export function createReadOnlySource(rawDb) {
-  function wrapDocRef(rawDocRef, colPath) {
-    return Object.freeze({
-      id: rawDocRef.id,
-      path: `${colPath}/${rawDocRef.id}`,
-      get: () => rawDocRef.get(),
-      collection: (subName) => {
-        const subPath = assertAllowlistedCollectionPath(`${colPath}/${rawDocRef.id}/${subName}`);
-        const rawSub =
-          typeof rawDocRef.collection === 'function'
-            ? rawDocRef.collection(subName)
-            : rawDb.collection(subPath);
-        return wrapCollectionRef(rawSub, subPath);
-      },
-    });
-  }
-
-  function wrapCollectionRef(rawColRef, colPath) {
-    const safePath = assertAllowlistedCollectionPath(colPath);
-    const hasListDocuments = typeof rawColRef.listDocuments === 'function';
-    return Object.freeze({
-      id: rawColRef.id,
-      path: safePath,
-      get: async () => {
-        const snap = await rawColRef.get();
-        return Object.freeze({
-          size: snap.docs.length,
-          empty: snap.docs.length === 0,
-          docs: snap.docs.map((d) =>
-            Object.freeze({ id: d.id, data: () => d.data(), ref: wrapDocRef(d.ref, safePath) }),
-          ),
-        });
-      },
-      listDocuments: hasListDocuments
-        ? async () => (await rawColRef.listDocuments()).map((r) => wrapDocRef(r, safePath))
-        : undefined,
-      doc: (docId) => wrapDocRef(rawColRef.doc(docId), safePath),
-    });
-  }
-
-  return Object.freeze({
-    collection: (collectionPath) => {
-      const safePath = assertAllowlistedCollectionPath(collectionPath);
-      return wrapCollectionRef(rawDb.collection(safePath), safePath);
-    },
-  });
-}
-
-/**
- * Scans only `exercises`, `plans`, `plans/{id}/days`, and `sessions` without calling `listCollections()`.
- */
-export async function scanAllowlistedDatabase(readOnlyDb) {
-  const buckets = new Map(COLLECTION_KEYS.map((key) => [key, new Map()]));
-  const orderedDocs = [];
-
-  async function collectFlat(colPath, bucketKey) {
-    const snap = await readOnlyDb.collection(colPath).get();
-    const sorted = [...snap.docs].sort((a, b) => a.id.localeCompare(b.id));
-    for (const docSnap of sorted) {
-      const data = docSnap.data();
-      buckets.get(bucketKey).set(docSnap.ref.path, data);
-      orderedDocs.push({ id: docSnap.id, path: docSnap.ref.path, collectionKey: bucketKey, data });
-    }
-    return sorted;
-  }
-
-  await collectFlat('exercises', 'exercises');
-  const plansCol = readOnlyDb.collection('plans');
-  const planDocs = await collectFlat('plans', 'plans');
-  const planIds = new Set(planDocs.map((d) => d.id));
-  if (typeof plansCol.listDocuments === 'function') {
-    for (const ref of await plansCol.listDocuments()) {
-      planIds.add(ref.id);
-    }
-  }
-  for (const planId of [...planIds].sort()) {
-    await collectFlat(`plans/${planId}/days`, 'plans/*/days');
-  }
-  await collectFlat('sessions', 'sessions');
-  return { buckets, orderedDocs };
-}
 
 async function commitBatches(targetDb, items, batchSize, applyOp) {
   let count = 0;
@@ -122,7 +56,7 @@ async function commitBatches(targetDb, items, batchSize, applyOp) {
 }
 
 /**
- * Runs pre-apply safety checks, purges target leftovers on `--apply`, copies verbatim, and verifies counts.
+ * Runs post-cutover authorization and diff guards, purges/copies only when authorized, and verifies equality.
  */
 export async function runCopyMigration({
   sourceDb,
@@ -133,15 +67,15 @@ export async function runCopyMigration({
   dryRun = true,
   batchSize = MAX_BATCH_SIZE,
   forcePurgeTargetSessions = /** @type {boolean | string[]} */ (false),
+  overwriteLiveDataAfterCutover = false,
 }) {
   const safeTargetId = assertSafeTargetDatabase(targetDatabaseId, sourceDatabaseId);
   if (typeof targetDb?.databaseId === 'string') {
     assertSafeTargetDatabase(targetDb.databaseId, sourceDatabaseId);
   }
+  assertPostCutoverApplyAuthorized(dryRun, overwriteLiveDataAfterCutover, safeTargetId);
   if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > MAX_BATCH_SIZE) {
-    throw new Error(
-      `Invalid batchSize ${batchSize}: must be an integer between 1 and ${MAX_BATCH_SIZE}.`,
-    );
+    throw new Error(`Invalid batchSize ${batchSize}: must be 1..${MAX_BATCH_SIZE}.`);
   }
 
   const sourceScan = await scanAllowlistedDatabase(createReadOnlySource(sourceDb));
@@ -149,7 +83,7 @@ export async function runCopyMigration({
   const guard = evaluateTargetGuard(sourceScan, beforeScan, forcePurgeTargetSessions);
   if (!dryRun && guard.blocked) {
     const reasonText = guard.reasons.join('; ');
-    throw new Error(`Refusing --apply: target holds real data absent from source (${reasonText}).`);
+    throw new Error(`Refusing --apply: target diverges from source (${reasonText}).`);
   }
 
   const docsToPurge = [...beforeScan.orderedDocs].reverse();
@@ -177,6 +111,11 @@ export async function runCopyMigration({
     const afterMap = afterScan.buckets.get(collection);
     const idsMatch =
       srcMap.size === afterMap.size && [...srcMap.keys()].every((docPath) => afterMap.has(docPath));
+    const docsMatch =
+      idsMatch &&
+      [...srcMap.entries()].every(([docPath, srcData]) =>
+        areFirestoreDocsEqual(srcData, afterMap.get(docPath)),
+      );
     return {
       collection,
       source: srcMap.size,
@@ -188,10 +127,11 @@ export async function runCopyMigration({
       targetAfter: afterMap.size,
       countsMatch: srcMap.size === afterMap.size,
       idsMatch,
+      docsMatch,
     };
   });
 
-  const targetEqualsSource = collections.every((c) => c.countsMatch && c.idsMatch);
+  const targetEqualsSource = collections.every((c) => c.countsMatch && c.idsMatch && c.docsMatch);
   const zeroMutationsVerified =
     dryRun &&
     deleteBatches === 0 &&
@@ -223,11 +163,12 @@ export async function runCopyMigration({
 }
 
 /**
- * Parses CLI flags with `--dry-run` enforced as default unless `--apply` is explicitly supplied.
+ * Parses CLI flags with `--dry-run` enforced as default and post-cutover `--apply` refused unless overridden.
  */
 export function parseCliArgs(argv) {
   let explicitDryRun = false;
   let explicitApply = false;
+  let overwriteLiveDataAfterCutover = false;
   let forcePurgeTargetSessions = /** @type {boolean | string[]} */ (false);
   let projectId = DEFAULT_PROJECT_ID;
   let targetDatabaseId = DEFAULT_TARGET_DB;
@@ -237,6 +178,7 @@ export function parseCliArgs(argv) {
     const arg = argv[i];
     if (arg === '--dry-run') explicitDryRun = true;
     else if (arg === '--apply') explicitApply = true;
+    else if (arg === POST_CUTOVER_OVERWRITE_FLAG) overwriteLiveDataAfterCutover = true;
     else if (arg === '--force-purge-target-sessions') forcePurgeTargetSessions = true;
     else if (arg.startsWith('--force-purge-target-sessions=')) {
       const raw = arg.slice('--force-purge-target-sessions='.length);
@@ -255,12 +197,17 @@ export function parseCliArgs(argv) {
   }
 
   if (explicitDryRun && explicitApply) throw new Error('Cannot combine --dry-run and --apply.');
+  if (!explicitApply && overwriteLiveDataAfterCutover) {
+    throw new Error(`${POST_CUTOVER_OVERWRITE_FLAG} is only valid with --apply.`);
+  }
   const safeTarget = assertSafeTargetDatabase(targetDatabaseId, DEFAULT_SOURCE_DB);
+  assertPostCutoverApplyAuthorized(!explicitApply, overwriteLiveDataAfterCutover, safeTarget);
   if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > MAX_BATCH_SIZE) {
     throw new Error(`Invalid --batch-size: must be an integer between 1 and ${MAX_BATCH_SIZE}.`);
   }
   return {
     dryRun: !explicitApply,
+    overwriteLiveDataAfterCutover,
     projectId: projectId.trim() || DEFAULT_PROJECT_ID,
     targetDatabaseId: safeTarget,
     batchSize,
@@ -272,12 +219,13 @@ const isMain =
   process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
 
 if (isMain) {
-  const opts = parseCliArgs(process.argv.slice(2));
-  const app = initializeApp(
-    { credential: applicationDefault(), projectId: opts.projectId },
-    `migrate-${Date.now()}`,
-  );
+  let app = null;
   try {
+    const opts = parseCliArgs(process.argv.slice(2));
+    app = initializeApp(
+      { credential: applicationDefault(), projectId: opts.projectId },
+      `migrate-${Date.now()}`,
+    );
     const report = await runCopyMigration({
       ...opts,
       sourceDb: getFirestore(app, DEFAULT_SOURCE_DB),
@@ -289,6 +237,6 @@ if (isMain) {
     console.error(err instanceof Error ? err.message : String(err));
     process.exitCode = 1;
   } finally {
-    await deleteApp(app);
+    if (app) await deleteApp(app);
   }
 }
